@@ -13,10 +13,29 @@ if response.status_code == 200:
 else:
     print(f"Failed to fetch page: {response.status_code}")
 
+
 soup = BeautifulSoup(response.text, 'html.parser')
 
 properties = []
 listings = soup.find_all('div', class_='HomeCardContainer')  # Update class as needed
+
+for listing in listings:
+    print(listing.prettify())  # Print the HTML of each listing
+    try:
+        price = listing.find('span', class_='homecardV2Price').text.strip()
+        print(f"Price: {price}")
+        address = listing.find('div', class_='address').text.strip()
+        print(f"Address: {address}")
+        beds_baths = listing.find('div', class_='stats').text.strip()
+        print(f"Beds/Baths: {beds_baths}")
+        properties.append({
+            'price': price,
+            'address': address,
+            'beds_baths': beds_baths
+        })
+    except AttributeError as e:
+        print(f"An error occurred: {e}")
+        continue
 
 for listing in listings:
     try:
