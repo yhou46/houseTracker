@@ -1,6 +1,14 @@
+# Install packages
+Always execute in src folder
+```shell
+cd src
+pipenv install
+```
+
 # To run the script
 1. Use pipenv shell
     ```shell
+    cd src
     pipenv shell
     ```
 
