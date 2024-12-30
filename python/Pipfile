@@ -4,8 +4,16 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+requests = "*"
+beautifulsoup4 = "*"
+pandas = "*"
+types-requests = "*"
 
 [dev-packages]
+mypy = "*"
+types-beautifulsoup4 = "*"
+types-requests = "*"
+pandas-stubs = "*"
 
 [requires]
 python_version = "3.12"

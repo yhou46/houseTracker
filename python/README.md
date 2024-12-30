@@ -1,18 +1,33 @@
-# Install packages
-Always execute in src folder
+All commands should be executed from python folder under repo root directory.
 ```shell
-cd src
-pipenv install
+cd python
 ```
+
+# Install required packages
+1. Install packages
+    ```shell
+
+    pipenv install
+    ```
+
+2. Install new packages
+    ```shell
+    pipenv install <package name>
+
+    # Install dev dependencies
+    pipenv install <package name> --dev
+    ```
 
 # To run the script
 1. Use pipenv shell
     ```shell
-    cd src
     pipenv shell
     ```
 
-2. Then run the script as usual
+2. Run the command in pipenv shell
+    ```shell
+    pipenv run python <your script>.py
+    ```
 
 3. To quit from pipenv shell, just type "exit"
 
