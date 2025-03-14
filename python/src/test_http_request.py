@@ -1,4 +1,5 @@
 import datetime as DatetimeLib
+import os
 from enum import Enum
 import requests
 from bs4 import BeautifulSoup
@@ -49,10 +50,12 @@ class IProperty:
 
     # Basic information
     address: IPropertyAddress
-    priceHistory: IPropertyPriceList
     area: IPropertyArea
     lotArea: IPropertyArea | None
     propertyType: PropertyType
+
+    # MLS
+    mlsNumber: str
 
     # Properties from gov website
     county: str
@@ -60,6 +63,9 @@ class IProperty:
     numberOfBedrooms: float
     numberOfBathrooms: float
     taxHistory: list[float]
+
+    # Properties that subject to change
+    priceHistory: IPropertyPriceList
 
 class IPropertyBasic:
     def __init__(
@@ -177,8 +183,9 @@ if __name__ == "__main__":
 
     timeStr = DatetimeLib.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     fileName = "redfinResponse_" + timeStr + ".txt"
-    filePath = "./"
-    with open(f"{filePath} {fileName}", "w") as file:
+    filePath = os.path.dirname(os.path.abspath(__file__)) + "/../tmp"
+    print(filePath)
+    with open(f"{filePath}/{fileName}", "w") as file:
         file.write(soup.prettify())
     parseHtml(result)
 
