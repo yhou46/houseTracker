@@ -175,7 +175,10 @@ if __name__ == "__main__":
     result = getRedfinResponse(url)
     soup = BeautifulSoup(result, "html.parser")
 
-    with open("./redfinResponse2.txt", "w") as file:
+    timeStr = DatetimeLib.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    fileName = "redfinResponse_" + timeStr + ".txt"
+    filePath = "./"
+    with open(f"{filePath} {fileName}", "w") as file:
         file.write(soup.prettify())
     parseHtml(result)
 
