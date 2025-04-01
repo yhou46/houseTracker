@@ -3,6 +3,12 @@ All commands should be executed from python folder under repo root directory.
 cd python
 ```
 
+# TODO:
+- 3 tables:
+property metadata
+price history, state
+government site metadata
+
 # Install required packages
 1. Install packages
     ```shell
