@@ -16,6 +16,14 @@ class IPropertyArea:
         self.area: float = area
         self.unit: AreaUnit = unit
 
+    def __eq__(self, value):
+        if not isinstance(value, IPropertyArea):
+            return NotImplemented
+        return self.area == value.area and self.unit == value.unit
+
+    def __str__(self):
+        return f"Area: {self.area} {self.unit.value}"
+
 class AddressType(Enum):
     StreetAddress = "Street Address"
     Intersection = "Intersection"
@@ -29,7 +37,7 @@ class PropertyType(Enum):
 
 # Concat different tags into a single street address
 # usaddress doc: https://parserator.datamade.us/api-docs/
-def concatenateStreetAddress(addressPropertyBag: dict) -> str:
+def extractStreetAddress(addressPropertyBag: dict) -> str:
     addressTags = set({
         "AddressNumber",
         "AddressNumberPrefix",
@@ -39,8 +47,6 @@ def concatenateStreetAddress(addressPropertyBag: dict) -> str:
         "IntersectionSeparator",
         "LandmarkName",
         "NotAddress",
-        #"OccupancyIdentifier",
-        #"OccupancyType",
         "StreetName",
         "StreetNamePostDirectional",
         "StreetNamePostModifier",
@@ -57,22 +63,43 @@ def concatenateStreetAddress(addressPropertyBag: dict) -> str:
             streetAddress += (" " if len(streetAddress) > 0 else "") + value
     return streetAddress
 
+def extractUnitInformation(addressPropertyBag: dict) -> str:
+    addressTags = set({
+        "OccupancyIdentifier",
+        "OccupancyType",
+    })
+    unit: str = ""
+    for key, value in addressPropertyBag.items():
+        if key in addressTags:
+            unit += (" " if len(unit) > 0 else "") + value
+    return unit
+
 # TODO: Use USPS address format API?
 class IPropertyAddress:
     def __init__(self, address: str):
-        self.fullAddress: str = address
         parsedAddress = usaddress.tag(address)
         addressType: str = parsedAddress[1]
         if (addressType != AddressType.StreetAddress.value):
             raise ValueError(f"Invalid address type: {addressType} for address: {address}")
         addressPropertyBag: dict = parsedAddress[0]
-        self.streetName: str = addressPropertyBag["AddressNumber"] + " " + addressPropertyBag["StreetName"] + " " + addressPropertyBag["StreetNamePostType"]
+        self.streetName: str = extractStreetAddress(addressPropertyBag)
+        self.unit: str = extractUnitInformation(addressPropertyBag)
         self.state: str = addressPropertyBag["StateName"]
         self.city: str = addressPropertyBag["PlaceName"]
         self.zipCode: str = addressPropertyBag["ZipCode"]
 
+        self.fullAddress: str = self.streetName + "," + ((self.unit + ",") if len(self.unit) > 0 else "") + self.city + "," + self.state + "," + self.zipCode
+
+    def getAddressLine(self) -> str:
+        return self.fullAddress
+
+    def __eq__(self, other):
+        if not isinstance(other, IPropertyAddress):
+            return NotImplemented
+        return self.fullAddress == other.fullAddress
+
     def __str__(self):
-        return f"Full address: {self.fullAddress}, Street: {self.streetName}, State: {self.state}, ZipCode: {self.zipCode}"
+        return f"Full address: {self.fullAddress}, Street: {self.streetName}, UnitNumber(if any): {self.unit}, State: {self.state}, ZipCode: {self.zipCode}"
         
 
 # class IProperty:

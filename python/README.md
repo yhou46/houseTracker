@@ -37,6 +37,12 @@ government site metadata
 
 3. To quit from pipenv shell, just type "exit"
 
+# To run unit test:
+1. export current directory to python path:
+```shell
+export PYTHONPATH=<path to repo>/houseTracker/python:$PYTHONPATH
+```
+
 # Update python version in pipenv
 
 1. Remove the environment
