@@ -1,28 +1,27 @@
 from enum import Enum
+from datetime import datetime
+
 import usaddress # type: ignore
 import uuid
 
-## Define some interfaces
-# class IPropertyPriceList:
-#     def __init__(self, priceList: list[tuple[float, DatetimeLib.datetime]]):
-#         self.priceList: list[tuple[float, DatetimeLib.datetime]] = priceList
 
 class AreaUnit(Enum):
     SquareFeet = "SquareFeet"
     SquareMeter = "SquareMeter"
+    Acres = "Acres"
 
-class IPropertyArea:
+class PropertyArea:
     def __init__(self, area: float, unit: AreaUnit = AreaUnit.SquareFeet):
         self.area: float = area
         self.unit: AreaUnit = unit
 
     def __eq__(self, value):
-        if not isinstance(value, IPropertyArea):
+        if not isinstance(value, PropertyArea):
             return NotImplemented
         return self.area == value.area and self.unit == value.unit
 
     def __str__(self):
-        return f"Area: {self.area} {self.unit.value}"
+        return f"{self.area} {self.unit.value}"
 
 class AddressType(Enum):
     StreetAddress = "Street Address"
@@ -100,7 +99,17 @@ class IPropertyAddress:
 
     def __str__(self):
         return f"Full address: {self.fullAddress}, Street: {self.streetName}, UnitNumber(if any): {self.unit}, State: {self.state}, ZipCode: {self.zipCode}"
-        
+
+# All prices are in USD
+class IPropertyPriceList:
+    def __init__(self, id: str, address: IPropertyAddress, priceList: list[tuple[datetime, float]]):
+        self.priceList = priceList
+        self.id = id
+        self.address = address
+
+    def addPrice(self, date: datetime, price: float):
+        self.priceList.append((date, price))
+        self.priceList.sort(key = lambda x: x[0]) # Sort by date
 
 # class IProperty:
 #     id: str
@@ -129,14 +138,14 @@ class IPropertyBasic:
         self,
         id: str,
         address: str,
-        area: IPropertyArea,
+        area: PropertyArea,
         propertyType: PropertyType,
-        lotArea: IPropertyArea | None,
+        lotArea: PropertyArea | None,
         numberOfBedrooms: float,
         numberOfBathrooms: float,
     ):
         self.id: str = id
-        self.address: str = address
+        self.address: IPropertyAddress = IPropertyAddress(address)
         self.area = area
         self.propertyType = propertyType
         self.lotArea = lotArea
@@ -144,13 +153,13 @@ class IPropertyBasic:
         self.numberOfBathrooms = numberOfBathrooms
     
     def __str__(self):
-        return f"Property address: {self.address}, type: {self.propertyType.value}"
+        return f"Property information: \naddress: {self.address},\nproperty type: {self.propertyType.value}, \narea: {self.area}, \nlot area: {self.lotArea}, \nnumberOfBedrooms: {self.numberOfBedrooms}, \nnumberOfBathrooms: {self.numberOfBathrooms}"
 
 if __name__ == "__main__":
     # Test the IPropertyAddress class
     address = "1838 Market St,Kirkland, WA 98033"
     addressObj = IPropertyAddress(address)
-    area = IPropertyArea(2879)
+    area = PropertyArea(2879)
     print(addressObj)
 
     # Test the IPropertyBasic class
@@ -158,7 +167,7 @@ if __name__ == "__main__":
     property1 = IPropertyBasic(
         str(propertyId),
         address,
-        IPropertyArea(1700, AreaUnit.SquareFeet),
+        PropertyArea(1700, AreaUnit.SquareFeet),
         PropertyType.SingleFamily,
         area,
         3,

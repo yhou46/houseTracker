@@ -4,6 +4,12 @@ cd python
 ```
 
 # TODO:
+- Store crawled prices into IPropertyPriceList object
+- Add/Create #MLS and parcelNumber (tax) to property
+- How to track if property basic propery changed? Like area change and room change? Add last update time?
+- Store data into DB (mongodb for now)
+
+
 - 3 tables:
 property metadata
 price history, state
@@ -37,10 +43,22 @@ government site metadata
 
 3. To quit from pipenv shell, just type "exit"
 
+# Test run
+1. Crawl a single page
+```shell
+export PYTHONPATH="$(pwd)/houseTracker/python:$PYTHONPATH"
+pipenv run python ./housetracker/crawl.py
+```
+
 # To run unit test:
 1. export current directory to python path:
 ```shell
-export PYTHONPATH=<path to repo>/houseTracker/python:$PYTHONPATH
+export PYTHONPATH="$(pwd)/houseTracker/python:$PYTHONPATH"
+```
+
+2. Run from current directory:
+```shell
+pipenv run python ./housetracker/test/iproperty.test.py
 ```
 
 # Update python version in pipenv

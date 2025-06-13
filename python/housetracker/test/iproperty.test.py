@@ -1,5 +1,6 @@
 import unittest
 import usaddress # type: ignore
+
 from housetracker.iproperty import extractStreetAddress, extractUnitInformation, IPropertyAddress
 
 class Test_extractStreetAddress(unittest.TestCase):

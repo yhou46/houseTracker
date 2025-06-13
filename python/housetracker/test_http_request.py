@@ -35,8 +35,8 @@ def parseHtml (content: str):
         if len(parts) >= 2:
             address = parts[0].strip()
             # MLS number format: MLS# 2301123
-            mlsNumber = parts[1].strip().split("#")[1].strip()
-            print(f"Address: {address}, MLS: {mlsNumber}")
+            # mlsNumber = parts[1].strip().split("#")[1].strip()
+            # print(f"Address: {address}, MLS: {mlsNumber}")
         else:
             raise ValueError("Input string does not contain enough parts separated by '|'")
     else:
@@ -96,6 +96,7 @@ if __name__ == "__main__":
 
     # Get page
     url = 'https://www.redfin.com/WA/Kenmore/7210-NE-158th-St-98028/home/275163'
+    # url = "https://www.redfin.com/WA/Kirkland/1838-Market-St-98033/home/11902466"
     result = getRedfinResponse(url)
     soup = BeautifulSoup(result, "html.parser")
 
