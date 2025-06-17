@@ -92,6 +92,7 @@ class IPropertyAddress:
     def getAddressLine(self) -> str:
         return self.fullAddress
 
+    # This is index related
     def __eq__(self, other):
         if not isinstance(other, IPropertyAddress):
             return NotImplemented
@@ -100,16 +101,42 @@ class IPropertyAddress:
     def __str__(self):
         return f"Full address: {self.fullAddress}, Street: {self.streetName}, UnitNumber(if any): {self.unit}, State: {self.state}, ZipCode: {self.zipCode}"
 
+class IPropertyHistoryEventType(Enum):
+    Listed = "Listed"
+    ReListed = "ReListed"
+    DeListed = "DeListed"
+    Pending = "Pending"
+    PriceChange = "PriceChange"
+    Sold = "Sold"
+    Other = "Other"
+
+class IPropertyHistoryEvent:
+    def __init__(self, datetime: datetime, eventType: IPropertyHistoryEventType, description: str, price: float | None = None):
+        self.datetime = datetime
+        self.eventType = eventType
+        self.description = description
+        self.price = price
+
+        if eventType == IPropertyHistoryEventType.PriceChange and price is None:
+            raise ValueError("Price must be provided for PriceChange event type")
+    
+    def __str__(self):
+        return f"Date: {self.datetime.strftime('%Y-%m-%d')}, Event: {self.eventType.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}"
+
 # All prices are in USD
-class IPropertyPriceList:
-    def __init__(self, id: str, address: IPropertyAddress, priceList: list[tuple[datetime, float]]):
-        self.priceList = priceList
+class IPropertyHistory:
+    def __init__(self, id: str, address: IPropertyAddress, history: list[IPropertyHistoryEvent] | None = None):
+        self.history = history if history is not None else []
         self.id = id
         self.address = address
 
-    def addPrice(self, date: datetime, price: float):
-        self.priceList.append((date, price))
-        self.priceList.sort(key = lambda x: x[0]) # Sort by date
+    def addEvent(self, event: IPropertyHistoryEvent):
+        self.history.append(event)
+        self.history.sort(key = lambda event: event.datetime) # Sort by date
+    
+    def __str__(self):
+        historyStr = "\n".join(str(event) for event in self.history)
+        return f"Property ID: {self.id},\nAddress: {self.address.getAddressLine()},\nHistory:\n{historyStr if historyStr else 'No history available'}"
 
 # class IProperty:
 #     id: str
@@ -143,6 +170,7 @@ class IPropertyBasic:
         lotArea: PropertyArea | None,
         numberOfBedrooms: float,
         numberOfBathrooms: float,
+        yearBuilt: int,
     ):
         self.id: str = id
         self.address: IPropertyAddress = IPropertyAddress(address)
@@ -151,9 +179,10 @@ class IPropertyBasic:
         self.lotArea = lotArea
         self.numberOfBedrooms = numberOfBedrooms
         self.numberOfBathrooms = numberOfBathrooms
+        self.yearBuilt = yearBuilt
     
     def __str__(self):
-        return f"Property information: \naddress: {self.address},\nproperty type: {self.propertyType.value}, \narea: {self.area}, \nlot area: {self.lotArea}, \nnumberOfBedrooms: {self.numberOfBedrooms}, \nnumberOfBathrooms: {self.numberOfBathrooms}"
+        return f"Property information: \naddress: {self.address},\nproperty type: {self.propertyType.value}, \narea: {self.area}, \nlot area: {self.lotArea}, \nnumberOfBedrooms: {self.numberOfBedrooms}, \nnumberOfBathrooms: {self.numberOfBathrooms}, \nyearBuilt: {self.yearBuilt}"
 
 if __name__ == "__main__":
     # Test the IPropertyAddress class
@@ -172,5 +201,6 @@ if __name__ == "__main__":
         area,
         3,
         2.5,
+        1899,
     )
     print(property1)

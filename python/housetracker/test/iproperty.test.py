@@ -1,7 +1,8 @@
 import unittest
 import usaddress # type: ignore
+from datetime import datetime
 
-from housetracker.iproperty import extractStreetAddress, extractUnitInformation, IPropertyAddress
+from housetracker.iproperty import extractStreetAddress, extractUnitInformation, IPropertyAddress, IPropertyHistory, IPropertyHistoryEvent, IPropertyHistoryEventType
 
 class Test_extractStreetAddress(unittest.TestCase):
     def testStreetAddress(self):
@@ -42,6 +43,20 @@ class Test_IPropertyAddress(unittest.TestCase):
         for input, expected in testCases.items():
             addressObj = IPropertyAddress(input)
             self.assertEqual(expected, addressObj.getAddressLine())
+
+class Test_IPropertyHistory(unittest.TestCase):
+    def test_history_events(self):
+        address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
+        events = [
+            IPropertyHistoryEvent(datetime(2022, 1, 1), IPropertyHistoryEventType.Listed, "Listed", 1000000),
+            IPropertyHistoryEvent(datetime(2022, 3, 1), IPropertyHistoryEventType.Sold, "Sold", 940000),
+        ]
+        history = IPropertyHistory("test-id", address, events)
+        self.assertEqual(len(history.history), 2)
+        history.addEvent(IPropertyHistoryEvent(datetime(2022, 2, 1), IPropertyHistoryEventType.PriceChange, "Price dropped", 950000))
+        self.assertEqual(len(history.history), 3)
+
+        self.assertEqual(history.history[2].eventType, IPropertyHistoryEventType.Sold)
 
 if __name__ == '__main__':
     unittest.main()
