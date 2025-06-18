@@ -11,6 +11,8 @@ class Test_extractStreetAddress(unittest.TestCase):
             "1838 Market St,Kirkland, WA 98033" : "1838 Market St",
             "Apt 116, 6910 Old Redmond Rd, Redmond, WA, 98052" : "6910 Old Redmond Rd",
             "655 Crockett St Unit A101,Seattle, WA 98109": "655 Crockett St",
+            "6928 155th Pl SE,Snohomish, WA 98296": "6928 155th Pl SE", # These 2 should be the same but test fails
+            "6928 155th Place SE, Snohomish, WA 98296": "6928 155th Pl SE",
         }
 
         for fullAddress, expectedStreetAddress in testCases.items():
