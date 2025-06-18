@@ -247,7 +247,7 @@ def testWithHtmlFile(filePath: str):
 
 if __name__ == "__main__":
     # Real test
-    url = 'https://www.redfin.com/WA/Kirkland/916-3rd-Ave-98033/unit-A104/home/2084987'
-    endToEndTest(url)
+    # url = 'https://www.redfin.com/WA/Kirkland/916-3rd-Ave-98033/unit-A104/home/2084987'
+    # endToEndTest(url)
 
-    # testWithHtmlFile("./tmp/redfinResponse_2025-06-15T21-39-30.html")
+    testWithHtmlFile("./tmp/redfinResponse_2025-06-15T21-39-30.html")
