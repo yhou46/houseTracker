@@ -2,7 +2,7 @@ import unittest
 import usaddress # type: ignore
 from datetime import datetime
 
-from housetracker.iproperty import extractStreetAddress, extractUnitInformation, IPropertyAddress, IPropertyHistory, IPropertyHistoryEvent, IPropertyHistoryEventType
+from shared.iproperty import extractStreetAddress, extractUnitInformation, IPropertyAddress, IPropertyHistory, IPropertyHistoryEvent, IPropertyHistoryEventType
 
 class Test_extractStreetAddress(unittest.TestCase):
     def testStreetAddress(self):

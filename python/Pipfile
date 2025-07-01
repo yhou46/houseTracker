@@ -10,6 +10,7 @@ pandas = "*"
 types-requests = "*"
 usaddress = "*"
 uuid = "*"
+scrapy = "*"
 
 [dev-packages]
 mypy = "*"

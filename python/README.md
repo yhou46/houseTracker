@@ -4,7 +4,10 @@ cd python
 ```
 
 # TODO:
-- Store crawled prices into IPropertyPriceList object
+- Use scrapy to crawl data
+scrapy -> parsed jsonl file -> service parse the jsonl file(convert to iproperty object, add id, check duplicates) and store in DB
+- Move iproperty to separate package?
+- Create a hash function to hash address
 - Add/Create #MLS and parcelNumber (tax) to property
 - How to track if property basic propery changed? Like area change and room change? Add last update time?
 - Store data into DB (mongodb for now)
