@@ -7,6 +7,14 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
+import sys
+import os
+
+# Add shared folder to Python path
+# This allows importing from python/shared/ from any Scrapy project
+shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
+sys.path.insert(0, shared_path)
+
 BOT_NAME = "redfin_spider"
 
 SPIDER_MODULES = ["redfin_spider.spiders"]
