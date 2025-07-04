@@ -24,7 +24,7 @@ class RedfinSpider(scrapy.Spider):
         ]
         
         # Create debug directory for saving HTML responses
-        self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug_html')
+        self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')
         os.makedirs(self.debug_dir, exist_ok=True)
     
     def start_requests(self):
