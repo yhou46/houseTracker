@@ -49,6 +49,7 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
         'numberOfBedroom': float | None,
         'numberOfBathroom': float | None,
         'yearBuilt': int | None,
+        'status': str | None,
     }
     
     # Parse address from title
@@ -169,11 +170,79 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
                             result['lotArea'] = None
                 break
     
+    # Parse property status
+    result['status'] = _parse_property_status(soup)
+
     # Parse property history using the same BeautifulSoup object
     property_history = parse_property_history(soup)
     result.update(property_history)
     
     return result
+
+def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
+    """
+    Parse property status from HTML content.
+
+    Args:
+        beautiful_soup: BeautifulSoup object of the property page
+
+    Returns:
+        Property status normalized to "Active", "Pending", "Sold", or None if not found
+    """
+    def normalize_status(raw_status: str) -> Optional[str]:
+        """
+        Normalize raw status text to standard values.
+
+        Args:
+            raw_status: Raw status text from HTML
+    
+        Returns:
+            Normalized status: "Active", "Pending", "Sold", or None
+        """
+        status_lower = raw_status.lower().strip()
+        
+        # Map various status texts to our three standard values
+        if any(keyword in status_lower for keyword in ['for sale', 'active', 'listed', 'on market']):
+            return 'Active'
+        elif any(keyword in status_lower for keyword in ['pending', 'under contract', 'contingent']):
+            return 'Pending'
+        elif any(keyword in status_lower for keyword in ['sold', 'closed', 'sale closed']):
+            return 'Sold'
+        
+        return None
+    
+    # Look for status in ListingStatusBannerSection
+    status_banner = beautiful_soup.select_one('.ListingStatusBannerSection')
+    if status_banner:
+        status_text = status_banner.get_text(strip=True)
+        if status_text:
+            print("Found status banner")
+            normalized = normalize_status(status_text)
+            if normalized:
+                return normalized
+
+    # Fallback: Look for status in the property history (most recent event)
+    history_events = _parse_history_from_javascript(beautiful_soup)
+    if not history_events:
+        history_events = _parse_history_from_html(beautiful_soup)
+    
+    print("Fallback: checking property history to get status")
+    if history_events:
+        # Check the most recent event description for status clues
+        latest_event = history_events[0]  # Assuming events are ordered by date
+        description = latest_event.get('description', '').lower()
+        
+        if 'sold' in description:
+            print("Method 6 working - found SOLD in history")
+            return 'Sold'
+        elif any(keyword in description for keyword in ['listed', 'for sale']):
+            print("Method 6 working - found Active status in history")
+            return 'Active'
+        elif 'pending' in description:
+            print("Method 6 working - found Pending status in history")
+            return 'Pending'
+    
+    return None
 
 def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
     """
@@ -185,19 +254,36 @@ def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
     Returns:
         Dictionary containing property history information
     """
-    history_events = []
-    
     # First, try to extract from JavaScript data (more complete)
-    js_events = _parse_history_from_javascript(beautiful_soup)
-    if js_events:
-        print(f"Successfully parsed {len(js_events)} events from JavaScript")
+    history_events_from_js = _parse_history_from_javascript(beautiful_soup)
+    if history_events_from_js:
+        print(f"Successfully parsed {len(history_events_from_js)} events from JavaScript")
         return {
-            'history': js_events,
-            'historyCount': len(js_events)
+            'history': history_events_from_js,
+            'historyCount': len(history_events_from_js)
         }
     
     # Fallback: Parse from HTML structure (less complete)
     print("No JavaScript data found, falling back to HTML parsing")
+    history_events_from_html = _parse_history_from_html(beautiful_soup)
+    
+    return {
+        'history': history_events_from_html,
+        'historyCount': len(history_events_from_html)
+    }
+
+def _parse_history_from_html(beautiful_soup: BeautifulSoup) -> List[Dict[str, Any]]:
+    """
+    Parse property history from HTML structure.
+    
+    Args:
+        beautiful_soup: BeautifulSoup object of the property page
+    
+    Returns:
+        List of history events, or empty list if parsing fails
+    """
+    history_events = []
+    
     for row in beautiful_soup.select(".PropertyHistoryEventRow"):
         event: Dict[str, Any] = {}
         
@@ -239,10 +325,7 @@ def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
         if event.get('date'):
             history_events.append(event)
     
-    return {
-        'history': history_events,
-        'historyCount': len(history_events)
-    }
+    return history_events
 
 def _parse_history_from_javascript(beautiful_soup: BeautifulSoup) -> List[Dict[str, Any]]:
     """
@@ -257,10 +340,53 @@ def _parse_history_from_javascript(beautiful_soup: BeautifulSoup) -> List[Dict[s
     history_events = []
     
     script_text = find_property_history_object(beautiful_soup)
-    historyObject = json.loads(script_text)
-    history_events = historyObject["events"]
+    if not script_text:
+        return []
     
-    return history_events
+    try:
+        historyObject = json.loads(script_text)
+        raw_events = historyObject.get("events", [])
+        
+        for raw_event in raw_events:
+            event: Dict[str, Any] = {}
+            
+            # Extract date - prefer eventDateString if available, otherwise convert eventDate
+            if 'eventDateString' in raw_event:
+                event['date'] = raw_event['eventDateString']
+            elif 'eventDate' in raw_event:
+                # Convert timestamp to readable date
+                timestamp = raw_event['eventDate'] / 1000  # Convert from milliseconds
+                event['date'] = datetime.fromtimestamp(timestamp).strftime('%b %d, %Y')
+            
+            # Extract description
+            if 'eventDescription' in raw_event:
+                event['description'] = raw_event['eventDescription']
+            
+            # Extract price
+            if 'price' in raw_event:
+                event['price'] = raw_event['price']
+            
+            # Extract MLS number from sourceId
+            if 'sourceId' in raw_event:
+                event['mlsNumber'] = raw_event['sourceId']
+            
+            # Extract source
+            if 'source' in raw_event:
+                event['source'] = raw_event['source']
+            
+            # Only add event if we have at least a date
+            if event.get('date'):
+                history_events.append(event)
+        
+        print(f"Successfully parsed {len(history_events)} events from JavaScript data")
+        return history_events
+        
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON from JavaScript data: {e}")
+        return []
+    except Exception as e:
+        print(f"Error parsing JavaScript history data: {e}")
+        return []
     
 def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
     script_tags = beautiful_soup.find_all("script")
