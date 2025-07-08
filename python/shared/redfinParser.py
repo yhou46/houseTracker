@@ -7,8 +7,8 @@ import uuid
 import usaddress # type: ignore
 
 # Make python aware of the module, no needed if edited PYTHONPATH
-# import sys, os
-# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared.iproperty import (
     IPropertyAddress,
@@ -250,4 +250,4 @@ if __name__ == "__main__":
     # url = 'https://www.redfin.com/WA/Kirkland/916-3rd-Ave-98033/unit-A104/home/2084987'
     # endToEndTest(url)
 
-    testWithHtmlFile("./tmp/redfinResponse_2025-06-15T21-39-30.html")
+    testWithHtmlFile("../tmp/redfinResponse_2025-06-15T21-39-30.html")

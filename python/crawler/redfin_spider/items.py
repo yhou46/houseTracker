@@ -6,7 +6,18 @@
 import scrapy
 
 
-class RedfinSpiderItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class RedfinPropertyItem(scrapy.Item):
+    # Basic property information
+    address = scrapy.Field()
+    area = scrapy.Field()  # Square footage
+    propertyType = scrapy.Field()
+    lotArea = scrapy.Field()
+    numberOfBedroom = scrapy.Field()
+    numberOfBathroom = scrapy.Field()
+    yearBuilt = scrapy.Field()
+    redfinId = scrapy.Field()
+    
+    # Additional metadata
+    url = scrapy.Field()
+    scrapedAt = scrapy.Field()
+    spiderName = scrapy.Field()

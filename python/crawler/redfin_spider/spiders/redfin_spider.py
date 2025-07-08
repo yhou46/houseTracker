@@ -1,8 +1,9 @@
 import scrapy
 import os
 from datetime import datetime
-from ..items import RedfinSpiderItem
+from ..items import RedfinPropertyItem
 from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT
+from ..parser import parse_property_page
 
 
 class RedfinSpider(scrapy.Spider):
@@ -55,12 +56,19 @@ class RedfinSpider(scrapy.Spider):
         
         self.logger.info(f"Found {len(property_links)} property links")
         
-        # Print all property links found
+        # Follow each property link
         for i, link in enumerate(property_links, 1):
             if link and '/home/' in link:
                 # Convert relative URL to absolute URL
                 full_url = response.urljoin(link)
                 self.logger.info(f"Property link {i}: {full_url}")
+                
+                # Follow the property link to parse individual property page
+                yield scrapy.Request(
+                    url=full_url,
+                    callback=self.parse_property_page,
+                    meta={'original_url': full_url}
+                )
             else:
                 self.logger.warning(f"Skipping invalid link {i}: {link}")
         
@@ -105,45 +113,30 @@ class RedfinSpider(scrapy.Spider):
     def parse_property_page(self, response):
         """
         Parse individual property page to extract detailed information.
-        
-        TODO: Implement logic to:
-        1. Extract property details using CSS selectors
-        2. Handle missing data gracefully
-        3. Create structured item with extracted data
         """
         self.logger.info(f"Parsing property page: {response.url}")
         
         # Save HTML response for debugging
         self._save_html_response(response, "property_page")
         
-        # TODO: Create item instance
-        # item = RedfinSpiderItem()
+        # Use the parser module to extract data
+        parsed_data = parse_property_page(
+            url=response.url,
+            html_content=response.text,
+            spider_name=self.name
+        )
         
-        # TODO: Extract basic property information
-        # item['property_url'] = response.url
+        # Create item and populate it
+        item = RedfinPropertyItem()
+        for key, value in parsed_data.items():
+            item[key] = value
         
-        # TODO: Extract address information
-        # address_elem = response.css('...').get()
+        # Log the extracted data
+        self.logger.info(f"Extracted property: {item.get('address', 'Unknown address')}")
+        self.logger.info(f"  - Redfin ID: {item.get('redfinId')}")
+        self.logger.info(f"  - Area: {item.get('area')} sq ft")
         
-        # TODO: Extract price
-        # price_elem = response.css('...').get()
-        
-        # TODO: Extract property details (bedrooms, bathrooms, etc.)
-        # self._extract_property_details(response, item)
-        
-        # TODO: Extract image URLs
-        # image_urls = response.css('...').getall()
-        
-        # TODO: Extract MLS number
-        # mls_elem = response.css('...').get()
-        
-        # TODO: Generate property ID from URL
-        # url_parts = response.url.split('/')
-        
-        # TODO: Yield the item
-        # yield item
-        
-        pass
+        yield item
     
     def _extract_property_details(self, response, item):
         """
