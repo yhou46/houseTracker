@@ -42,14 +42,14 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
     """
     soup = BeautifulSoup(html_content, "html.parser")
     result: Dict[str, Any] = {
-        'address': str | None,
-        'area': str | None,
-        'propertyType': str | None,
-        'lotArea': str | None,
-        'numberOfBedroom': float | None,
-        'numberOfBathroom': float | None,
-        'yearBuilt': int | None,
-        'status': str | None,
+        'address': None,
+        'area':  None,
+        'propertyType': None,
+        'lotArea': None,
+        'numberOfBedroom': None,
+        'numberOfBathroom': None,
+        'yearBuilt': None,
+        'status': None,
     }
     
     # Parse address from title

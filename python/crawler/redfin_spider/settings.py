@@ -74,9 +74,13 @@ DOWNLOAD_DELAY = 3
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    "redfin_spider.pipelines.RedfinSpiderPipeline": 300,
-#}
+ITEM_PIPELINES = {
+    "redfin_spider.pipelines.JsonlPipeline": 300,
+}
+
+# JSONL Pipeline settings
+JSONL_OUTPUT_DIR = "output"
+JSONL_OUTPUT_FILE = None  # Will use timestamp-based filename if None
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html

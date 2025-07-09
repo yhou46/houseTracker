@@ -15,9 +15,12 @@ class RedfinPropertyItem(scrapy.Item):
     numberOfBedroom = scrapy.Field()
     numberOfBathroom = scrapy.Field()
     yearBuilt = scrapy.Field()
-    redfinId = scrapy.Field()
+    status = scrapy.Field()
+    history = scrapy.Field()
+    historyCount = scrapy.Field()
     
     # Additional metadata
     url = scrapy.Field()
+    redfinId = scrapy.Field()
     scrapedAt = scrapy.Field()
     spiderName = scrapy.Field()
