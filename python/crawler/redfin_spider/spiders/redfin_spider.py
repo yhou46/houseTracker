@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from ..items import RedfinPropertyItem
 from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT
-from ..parser import parse_property_page
+from ..redfin_parser import parse_property_page
 
 
 class RedfinSpider(scrapy.Spider):
@@ -48,7 +48,7 @@ class RedfinSpider(scrapy.Spider):
         self.logger.info(f"Parsing search results from: {response.url}")
         
         # Save HTML response for debugging
-        self._save_html_response(response, "search_results")
+        # self._save_html_response(response, "search_results")
         
         # Extract property links from search results
         # Using the CSS selector for the property card links
@@ -117,7 +117,7 @@ class RedfinSpider(scrapy.Spider):
         self.logger.info(f"Parsing property page: {response.url}")
         
         # Save HTML response for debugging
-        self._save_html_response(response, "property_page")
+        # self._save_html_response(response, "property_page")
         
         # Use the parser module to extract data
         parsed_data = parse_property_page(
@@ -190,7 +190,6 @@ class RedfinSpider(scrapy.Spider):
             # Save the HTML content
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(response.text)
-            
             self.logger.info(f"Saved HTML response to: {filepath}")
             
         except Exception as e:

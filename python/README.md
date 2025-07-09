@@ -46,22 +46,17 @@ government site metadata
 
 3. To quit from pipenv shell, just type "exit"
 
-# Test run
-1. Crawl a single page
-```shell
-export PYTHONPATH="$(pwd)/houseTracker/python:$PYTHONPATH"
-pipenv run python ./housetracker/crawl.py
-```
-
 # To run unit test:
 1. export current directory to python path:
-```shell
-export PYTHONPATH="$(pwd)/houseTracker/python:$PYTHONPATH"
-```
+    Need to edit PYTHONPATH to point to repoRoot/python
+    ```shell
+    cd repoRoot/python
+    export PYTHONPATH="$(pwd):$PYTHONPATH"
+    ```
 
-2. Run from current directory:
+2. Run from repoRoot/python:
 ```shell
-pipenv run python ./housetracker/test/iproperty.test.py
+pipenv run python ./shared/test/iproperty.test.py
 ```
 
 # Update python version in pipenv
