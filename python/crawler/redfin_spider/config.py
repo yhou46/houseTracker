@@ -11,4 +11,4 @@ ZIP_CODES: List[str] = [
 ]
 
 # URL format for Redfin zip code searches
-REDFIN_ZIP_URL_FORMAT = "https://www.redfin.com/zipcode/{zip_code}" 
+REDFIN_ZIP_URL_FORMAT = "https://www.redfin.com/zipcode/{zip_code}"

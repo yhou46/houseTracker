@@ -92,11 +92,11 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
             parts = sqft_clean.split(" ")
             if len(parts) >= 2:
                 number = float(parts[0])
-                unit = " ".join(parts[1:])
+                unit = "sqft"
                 result['area'] = f"{number} {unit}"
             else:
                 # Just a number, assume sq ft
-                result['area'] = f"{float(parts[0])} sq ft"
+                result['area'] = f"{float(parts[0])} sqft"
         except ValueError:
             result['area'] = None
     
@@ -136,7 +136,7 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
                         parts = lot_size_clean.split(" ")
                         if len(parts) >= 2:
                             number = float(parts[0])
-                            unit = " ".join(parts[1:])
+                            unit = "".join(parts[1:])
                             result['lotArea'] = f"{number} {unit}"
                         else:
                             # Just a number, assume sq ft
