@@ -3,7 +3,7 @@ from typing import List
 
 # Zip codes to crawl
 ZIP_CODES: List[str] = [
-    '98052',  # Example zip code
+    '98034',  # Example zip code
     # Add more zip codes here as needed
     # '98053',
     # '98054',

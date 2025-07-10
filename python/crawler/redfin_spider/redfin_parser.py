@@ -30,12 +30,13 @@ def extract_redfin_id(url: str) -> Optional[str]:
     return None
 
 
-def parse_property_details(html_content: str) -> Dict[str, Any]:
+def parse_property_details(html_content: str, logger=None) -> Dict[str, Any]:
     """
     Parse property details from HTML content using Beautiful Soup.
     
     Args:
         html_content: HTML content of the property page
+        logger: Logger instance for logging messages
     
     Returns:
         Dictionary containing extracted property details and history
@@ -172,10 +173,17 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
     
     # Parse property status
     result['status'] = _parse_property_status(soup)
+    if logger and result['status']:
+        logger.info(f"Found status banner: {result['status']}")
 
     # Parse property history using the same BeautifulSoup object
-    property_history = parse_property_history(soup)
+    property_history = parse_property_history(soup, logger)
     result.update(property_history)
+    
+    if logger and property_history.get('historyCount', 0) > 0:
+        logger.info(f"Successfully parsed {property_history['historyCount']} events from JavaScript data")
+    elif logger:
+        logger.info("No JavaScript data found, falling back to HTML parsing")
     
     return result
 
@@ -216,7 +224,8 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
     if status_banner:
         status_text = status_banner.get_text(strip=True)
         if status_text:
-            print("Found status banner")
+            # Note: We can't use logger here as this is a standalone function
+            # The logging will be handled by the calling function
             normalized = normalize_status(status_text)
             if normalized:
                 return normalized
@@ -226,45 +235,46 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
     if not history_events:
         history_events = _parse_history_from_html(beautiful_soup)
     
-    print("Fallback: checking property history to get status")
+    # Note: We can't use logger here as this is a standalone function
+    # The logging will be handled by the calling function
     if history_events:
         # Check the most recent event description for status clues
         latest_event = history_events[0]  # Assuming events are ordered by date
         description = latest_event.get('description', '').lower()
         
         if 'sold' in description:
-            print("Method 6 working - found SOLD in history")
             return 'Sold'
         elif any(keyword in description for keyword in ['listed', 'for sale']):
-            print("Method 6 working - found Active status in history")
             return 'Active'
         elif 'pending' in description:
-            print("Method 6 working - found Pending status in history")
             return 'Pending'
     
     return None
 
-def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
+def parse_property_history(beautiful_soup: BeautifulSoup, logger=None) -> Dict[str, Any]:
     """
     Parse property history from HTML content.
     
     Args:
         beautiful_soup: BeautifulSoup object of the property page
+        logger: Logger instance for logging messages
     
     Returns:
         Dictionary containing property history information
     """
     # First, try to extract from JavaScript data (more complete)
-    history_events_from_js = _parse_history_from_javascript(beautiful_soup)
+    history_events_from_js = _parse_history_from_javascript(beautiful_soup, logger)
     if history_events_from_js:
-        print(f"Successfully parsed {len(history_events_from_js)} events from JavaScript")
+        if logger:
+            logger.info("Found script with propertyHistoryInfo")
         return {
             'history': history_events_from_js,
             'historyCount': len(history_events_from_js)
         }
     
     # Fallback: Parse from HTML structure (less complete)
-    print("No JavaScript data found, falling back to HTML parsing")
+    if logger:
+        logger.info("No target Javascript data found")
     history_events_from_html = _parse_history_from_html(beautiful_soup)
     
     return {
@@ -327,19 +337,20 @@ def _parse_history_from_html(beautiful_soup: BeautifulSoup) -> List[Dict[str, An
     
     return history_events
 
-def _parse_history_from_javascript(beautiful_soup: BeautifulSoup) -> List[Dict[str, Any]]:
+def _parse_history_from_javascript(beautiful_soup: BeautifulSoup, logger=None) -> List[Dict[str, Any]]:
     """
     Parse property history from JavaScript data.
     
     Args:
         beautiful_soup: BeautifulSoup object of the property page
+        logger: Logger instance for logging messages
     
     Returns:
         List of history events, or empty list if parsing fails
     """
     history_events = []
     
-    script_text = find_property_history_object(beautiful_soup)
+    script_text = find_property_history_object(beautiful_soup, logger)
     if not script_text:
         return []
     
@@ -378,23 +389,27 @@ def _parse_history_from_javascript(beautiful_soup: BeautifulSoup) -> List[Dict[s
             if event.get('date'):
                 history_events.append(event)
         
-        print(f"Successfully parsed {len(history_events)} events from JavaScript data")
+        if logger:
+            logger.info(f"Successfully parsed {len(history_events)} events from JavaScript")
         return history_events
         
     except json.JSONDecodeError as e:
-        print(f"Failed to parse JSON from JavaScript data: {e}")
+        if logger:
+            logger.error(f"Failed to parse JSON from JavaScript data: {e}")
         return []
     except Exception as e:
-        print(f"Error parsing JavaScript history data: {e}")
+        if logger:
+            logger.error(f"Error parsing JavaScript history data: {e}")
         return []
     
-def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
+def find_property_history_object(beautiful_soup: BeautifulSoup, logger=None) -> str:
     script_tags = beautiful_soup.find_all("script")
     script_text = ""
     for script in script_tags:
         if script.string and "propertyHistoryInfo" in script.string:
             script_text = script.string
-            print("Found script with propertyHistoryInfo")
+            if logger:
+                logger.info("Found script with propertyHistoryInfo")
             break
     
     # Find "propertyHistoryInfo" object
@@ -414,34 +429,48 @@ def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
             end_curly_braces_index += 1
         return script_text[start_curly_braces_index:end_curly_braces_index + 1].replace("\\\"", "\"")
     
-    print("No target Javascript data found")
+    if logger:
+        logger.info("No target Javascript data found")
     return ""
 
-def parse_property_page(url: str, html_content: str, spider_name: str = "redfin_spider") -> Dict[str, Any]:
+def parse_property_page(url: str, html_content: str, spider_name: str = "redfin_spider", logger=None) -> Dict[str, Any]:
     """
-    Parse a complete Redfin property page.
+    Parse a Redfin property page and extract all relevant information.
     
     Args:
-        url: Property page URL
+        url: The URL of the property page
         html_content: HTML content of the property page
-        spider_name: Name of the spider (for metadata)
+        spider_name: Name of the spider (for logging)
+        logger: Logger instance for logging messages
     
     Returns:
         Dictionary containing all extracted property information
     """
-    # Extract basic metadata
+    # Create a default logger if none provided
+    if logger is None:
+        import logging
+        logger = logging.getLogger('redfin_parser')
+    
+    logger.info(f"Starting to parse property page: {url}")
+    
+    # Extract Redfin ID from URL
     redfin_id = extract_redfin_id(url)
+    if redfin_id:
+        logger.debug(f"Extracted Redfin ID: {redfin_id}")
     
-    # Parse property details from HTML (includes history)
-    property_details = parse_property_details(html_content)
+    # Parse property details from HTML
+    property_details = parse_property_details(html_content, logger)
     
-    # Combine all data
+    # Add metadata
     result = {
         'url': url,
         'redfinId': redfin_id,
-        'scrapedAt': datetime.now().isoformat(),
         'spiderName': spider_name,
+        'timestamp': datetime.now().isoformat(),
         **property_details
     }
+    
+    logger.info(f"Successfully parsed property: {result.get('address', 'Unknown address')}")
+    logger.debug(f"Parsed data keys: {list(result.keys())}")
     
     return result 

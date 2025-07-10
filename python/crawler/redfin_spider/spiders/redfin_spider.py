@@ -28,13 +28,17 @@ class RedfinSpider(scrapy.Spider):
         self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')
         os.makedirs(self.debug_dir, exist_ok=True)
     
-    def start_requests(self):
+    async def start(self):
         """Generate initial requests to start the crawling process."""
         for url in self.start_urls:
             yield scrapy.Request(
                 url=url,
                 callback=self.parse_search_results
             )
+    
+    def start_requests(self):
+        """Legacy method for backward compatibility."""
+        return self.start()
     
     def parse_search_results(self, response):
         """
@@ -123,7 +127,8 @@ class RedfinSpider(scrapy.Spider):
         parsed_data = parse_property_page(
             url=response.url,
             html_content=response.text,
-            spider_name=self.name
+            spider_name=self.name,
+            logger=self.logger
         )
         
         # Create item and populate it
