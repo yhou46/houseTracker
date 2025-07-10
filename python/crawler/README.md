@@ -13,6 +13,12 @@ cd python/crawler
 scrapy crawl redfin_spider -L DEBUG
 ```
 
+- Run with only a few items
+```shell
+cd python/crawler
+python -m scrapy crawl redfin_spider -s CLOSESPIDER_ITEMCOUNT=1
+```
+
 ## Run test
 1. Need to set up PYTHONPATH
     ```shell

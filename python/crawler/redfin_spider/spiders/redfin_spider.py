@@ -28,7 +28,7 @@ class RedfinSpider(scrapy.Spider):
         self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')
         os.makedirs(self.debug_dir, exist_ok=True)
     
-    def start_requests(self):
+    async def start(self):
         """Generate initial requests to start the crawling process."""
         for url in self.start_urls:
             yield scrapy.Request(
