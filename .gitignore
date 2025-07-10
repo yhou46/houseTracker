@@ -176,3 +176,4 @@ pyrightconfig.json
 python/tmp
 python/crawler/**/debug
 python/crawler/**/output
+python/crawler/**/logs
