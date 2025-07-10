@@ -1,7 +1,27 @@
-# TODO:
+# Real estate history tracker
 
-- Get property data from a Redfin URL
+## Goals
+### Read
+- Search by different criterias
+    - property type
+    - number of bedroom
+    - number of bathroom
+    - cities
+    - zipcodes
+    - area
+    - lot area
+    - list price
+    - Price change history, like what properties have decrease in list price
+    - list time, like newly listed
+    - pending time, like pending in past month
+    - sold time
+    - sold price, like find properties where sold price > list price
 
-- Get property data from Gov website
+### Write
+- Get data from multiple sources
+    - Redfin
+    - Zillow
 
-- Get property data from Zillow URL
+- Maintain data integrity
+    - No data can be changed.
+    - Fix and mark mismatch in Redfin/Zillow price history. Sometimes these sites remove history like price change history.
