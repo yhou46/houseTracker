@@ -5,7 +5,7 @@ from typing import List
 ZIP_CODES: List[str] = [
     '98052',  # Example zip code
     # Add more zip codes here as needed
-    # '98053',
+    '98034',
     # '98054',
     # '98055',
 ]

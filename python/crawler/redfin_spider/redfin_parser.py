@@ -11,6 +11,9 @@ from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup
 import json
 
+# Set up logging
+import logging
+logger = logging.getLogger(__name__)
 
 def extract_redfin_id(url: str) -> Optional[str]:
     """
@@ -216,7 +219,7 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
     if status_banner:
         status_text = status_banner.get_text(strip=True)
         if status_text:
-            print("Found status banner")
+            logger.info("Found status banner")
             normalized = normalize_status(status_text)
             if normalized:
                 return normalized
@@ -226,20 +229,20 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
     if not history_events:
         history_events = _parse_history_from_html(beautiful_soup)
     
-    print("Fallback: checking property history to get status")
+    logger.warning("Fallback: checking property history to get status")
     if history_events:
         # Check the most recent event description for status clues
         latest_event = history_events[0]  # Assuming events are ordered by date
         description = latest_event.get('description', '').lower()
         
         if 'sold' in description:
-            print("Method 6 working - found SOLD in history")
+            logger.info("Method 6 working - found SOLD in history")
             return 'Sold'
         elif any(keyword in description for keyword in ['listed', 'for sale']):
-            print("Method 6 working - found Active status in history")
+            logger.info("Method 6 working - found Active status in history")
             return 'Active'
         elif 'pending' in description:
-            print("Method 6 working - found Pending status in history")
+            logger.info("Method 6 working - found Pending status in history")
             return 'Pending'
     
     return None
@@ -257,14 +260,14 @@ def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
     # First, try to extract from JavaScript data (more complete)
     history_events_from_js = _parse_history_from_javascript(beautiful_soup)
     if history_events_from_js:
-        print(f"Successfully parsed {len(history_events_from_js)} events from JavaScript")
+        logger.info(f"Successfully parsed {len(history_events_from_js)} events from JavaScript")
         return {
             'history': history_events_from_js,
             'historyCount': len(history_events_from_js)
         }
     
     # Fallback: Parse from HTML structure (less complete)
-    print("No JavaScript data found, falling back to HTML parsing")
+    logger.warning("No JavaScript data found, falling back to HTML parsing")
     history_events_from_html = _parse_history_from_html(beautiful_soup)
     
     return {
@@ -378,14 +381,14 @@ def _parse_history_from_javascript(beautiful_soup: BeautifulSoup) -> List[Dict[s
             if event.get('date'):
                 history_events.append(event)
         
-        print(f"Successfully parsed {len(history_events)} events from JavaScript data")
+        logger.info(f"Successfully parsed {len(history_events)} events from JavaScript data")
         return history_events
         
     except json.JSONDecodeError as e:
-        print(f"Failed to parse JSON from JavaScript data: {e}")
+        logger.error(f"Failed to parse JSON from JavaScript data: {e}", stack_info=True)
         return []
     except Exception as e:
-        print(f"Error parsing JavaScript history data: {e}")
+        logger.error(f"Error parsing JavaScript history data: {e}", stack_info=True)
         return []
     
 def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
@@ -394,7 +397,7 @@ def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
     for script in script_tags:
         if script.string and "propertyHistoryInfo" in script.string:
             script_text = script.string
-            print("Found script with propertyHistoryInfo")
+            logger.info("Found script with propertyHistoryInfo")
             break
     
     # Find "propertyHistoryInfo" object
@@ -414,7 +417,7 @@ def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
             end_curly_braces_index += 1
         return script_text[start_curly_braces_index:end_curly_braces_index + 1].replace("\\\"", "\"")
     
-    print("No target Javascript data found")
+    logger.error("No target Javascript data found", stack_info=True)
     return ""
 
 def parse_property_page(url: str, html_content: str, spider_name: str = "redfin_spider") -> Dict[str, Any]:
