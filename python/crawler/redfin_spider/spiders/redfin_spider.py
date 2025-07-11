@@ -2,7 +2,7 @@ import scrapy
 import os
 from datetime import datetime
 from ..items import RedfinPropertyItem
-from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT
+from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP
 from ..redfin_parser import parse_property_page
 
 
@@ -18,11 +18,12 @@ class RedfinSpider(scrapy.Spider):
     
     def __init__(self, *args, **kwargs):
         super(RedfinSpider, self).__init__(*args, **kwargs)
-        # Generate start URLs from zip codes in config
-        self.start_urls = [
-            REDFIN_ZIP_URL_FORMAT.format(zip_code=zip_code) 
-            for zip_code in ZIP_CODES
+        # Generate start URLs from config
+        zip_code_urls = [
+            REDFIN_ZIP_URL_FORMAT.format(zip_code=zip_code) for zip_code in ZIP_CODES
         ]
+        city_urls = list(CITY_URL_MAP.values())
+        self.start_urls = zip_code_urls + city_urls
         
         # Create debug directory for saving HTML responses
         self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')

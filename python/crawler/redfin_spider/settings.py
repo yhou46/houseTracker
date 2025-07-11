@@ -10,6 +10,7 @@
 import sys
 import os
 from datetime import datetime
+from typing import Dict
 
 # Add shared folder to Python path
 # This allows importing from python/shared/ from any Scrapy project
@@ -79,7 +80,7 @@ DOWNLOAD_DELAY = 2
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-ITEM_PIPELINES = {
+ITEM_PIPELINES: Dict[str, int] = {
     "redfin_spider.pipelines.JsonlPipeline": 300,
 }
 
