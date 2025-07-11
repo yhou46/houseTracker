@@ -16,6 +16,10 @@ from datetime import datetime
 shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
 sys.path.insert(0, shared_path)
 
+
+# =============================================================================
+# CRAWLER SETTINGS
+# =============================================================================
 BOT_NAME = "redfin_spider"
 
 SPIDER_MODULES = ["redfin_spider.spiders"]
@@ -107,7 +111,9 @@ JSONL_OUTPUT_FILE = None  # type: ignore # Will use timestamp-based filename if 
 # Set settings whose default value is deprecated to a future-proof value
 FEED_EXPORT_ENCODING = "utf-8"
 
+# =============================================================================
 # Logging settings
+# =============================================================================
 ## Create log folder if it doesn't exist
 logs_dir = os.path.join(os.path.dirname(__file__), '..', 'redfin_logs')
 os.makedirs(logs_dir, exist_ok=True)
