@@ -175,5 +175,6 @@ pyrightconfig.json
 # Project specific
 python/tmp
 python/crawler/**/debug
-python/crawler/**/output
+python/crawler/**/redfin_output
+python/crawler/**/redfin_logs
 python/crawler/**/logs

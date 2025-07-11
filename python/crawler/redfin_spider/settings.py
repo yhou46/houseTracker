@@ -9,6 +9,7 @@
 
 import sys
 import os
+from datetime import datetime
 
 # Add shared folder to Python path
 # This allows importing from python/shared/ from any Scrapy project
@@ -79,8 +80,8 @@ ITEM_PIPELINES = {
 }
 
 # JSONL Pipeline settings
-JSONL_OUTPUT_DIR = "output"
-JSONL_OUTPUT_FILE = None  # Will use timestamp-based filename if None
+JSONL_OUTPUT_DIR = "redfin_output"
+JSONL_OUTPUT_FILE = None  # type: ignore # Will use timestamp-based filename if None
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
@@ -105,3 +106,17 @@ JSONL_OUTPUT_FILE = None  # Will use timestamp-based filename if None
 
 # Set settings whose default value is deprecated to a future-proof value
 FEED_EXPORT_ENCODING = "utf-8"
+
+# Logging settings
+## Create log folder if it doesn't exist
+logs_dir = os.path.join(os.path.dirname(__file__), '..', 'redfin_logs')
+os.makedirs(logs_dir, exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d %H%M%S")
+
+LOG_LEVEL = 'INFO'
+LOG_STDOUT = True
+LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
+LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
+LOG_FILE = os.path.join(logs_dir, f'spider_{timestamp}.log')
+LOG_FILE_APPEND = False
+LOG_STDOUT = True
