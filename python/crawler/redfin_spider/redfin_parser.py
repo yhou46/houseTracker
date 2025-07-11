@@ -417,7 +417,7 @@ def find_property_history_object(beautiful_soup: BeautifulSoup) -> str:
             end_curly_braces_index += 1
         return script_text[start_curly_braces_index:end_curly_braces_index + 1].replace("\\\"", "\"")
     
-    logger.error("No target Javascript data found", stack_info=True)
+    logger.info("No target Javascript data found")
     return ""
 
 def parse_property_page(url: str, html_content: str, spider_name: str = "redfin_spider") -> Dict[str, Any]:
