@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import usaddress # type: ignore
 import uuid
-
+import logging
 
 class AreaUnit(Enum):
     SquareFeet = "SquareFeet"
@@ -72,6 +72,103 @@ def extractUnitInformation(addressPropertyBag: dict) -> str:
         if key in addressTags:
             unit += (" " if len(unit) > 0 else "") + value
     return unit
+
+# Convert address string to a hash string
+def get_address_hash(address: str, logger: logging.Logger | None = None) -> str:
+    # USPS standard abbreviations for street suffixes and directionals
+    suffix_abbr = {
+        "street": "St",
+        "st": "St",
+        "avenue": "Ave",
+        "ave": "Ave",
+        "boulevard": "Blvd",
+        "blvd": "Blvd",
+        "road": "Rd",
+        "rd": "Rd",
+        "drive": "Dr",
+        "dr": "Dr",
+        "lane": "Ln",
+        "ln": "Ln",
+        "court": "Ct",
+        "ct": "Ct",
+        "place": "Pl",
+        "pl": "Pl",
+        "terrace": "Ter",
+        "ter": "Ter",
+        "circle": "Cir",
+        "cir": "Cir",
+        "parkway": "Pkwy",
+        "pkwy": "Pkwy",
+        "way": "Way",
+        "trail": "Trl",
+        "trl": "Trl",
+        "highway": "Hwy",
+        "hwy": "Hwy",
+        "driveway": "Dr",
+        "drwy": "Dr",
+        # Add more as needed
+    }
+    directional_abbr = {
+        "north": "N",
+        "n": "N",
+        "south": "S",
+        "s": "S",
+        "east": "E",
+        "e": "E",
+        "west": "W",
+        "w": "W",
+        "northeast": "NE",
+        "ne": "NE",
+        "northwest": "NW",
+        "nw": "NW",
+        "southeast": "SE",
+        "se": "SE",
+        "southwest": "SW",
+        "sw": "SW",
+    }
+    def abbr_word(word: str, abbr_map: dict) -> str:
+        return abbr_map.get(word.lower(), word)
+    try:
+        parsedAddress = usaddress.tag(address)
+        addressPropertyBag = parsedAddress[0]
+        # Build street part with abbreviation normalization
+        street_components = [
+            addressPropertyBag.get("AddressNumber", ""),
+            addressPropertyBag.get("AddressNumberPrefix", ""),
+            abbr_word(addressPropertyBag.get("StreetNamePreDirectional", ""), directional_abbr),
+            addressPropertyBag.get("StreetNamePreType", ""),
+            addressPropertyBag.get("StreetName", ""),
+            abbr_word(addressPropertyBag.get("StreetNamePostType", ""), suffix_abbr),
+            abbr_word(addressPropertyBag.get("StreetNamePostDirectional", ""), directional_abbr)
+        ]
+        street = " ".join(filter(None, street_components))
+        # Build unit part
+        unit_components = [
+            addressPropertyBag.get("OccupancyType", ""),
+            addressPropertyBag.get("OccupancyIdentifier", "")
+        ]
+        unit = " ".join(filter(None, unit_components))
+        # City, state, zip
+        city = addressPropertyBag.get("PlaceName", "")
+        state = addressPropertyBag.get("StateName", "")
+        zipcode = addressPropertyBag.get("ZipCode", "")
+        # Concatenate all parts
+        components = [street]
+        if unit:
+            components.append(unit)
+        components.extend([city, state, zipcode])
+        normalized = ",".join(filter(None, components))
+        # Apply normalization: lowercase, spaces to '-', commas to '|'
+        normalized = normalized.lower().replace(" ", "-").replace(",", "|")
+        return normalized
+    except Exception as e:
+        # Fallback: normalize the original string if parsing fails
+        error_msg = f"Error parsing address: {address}, error: {e}"
+        if logger != None:
+            logger.error(error_msg)
+        else:
+            print(error_msg)
+        raise Exception(error_msg)
 
 # TODO: Use USPS address format API?
 class IPropertyAddress:
@@ -244,12 +341,13 @@ class IProperty(IPropertyBasic):
         state: IPropertyState,
         price: float | None,
         lastUpdated: datetime | None = None,
-
+        redfinId: str | None = None
     ):
         super().__init__(id, address, area, propertyType, lotArea, numberOfBedrooms, numberOfBathrooms, yearBuilt)
         self.state = state
         self.price = price
         self._lastUpdated = lastUpdated if lastUpdated is not None else datetime.now(timezone.utc)
+        self.redfinId = redfinId
 
     @property
     def lastUpdated(self) -> datetime:
@@ -258,7 +356,7 @@ class IProperty(IPropertyBasic):
     def __str__(self):
         return (
             super().__str__() +
-            f", \nstate: {self.state.value}, \nprice: {self.price if self.price is not None else 'N/A'}, \nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}"
+            f", \nstate: {self.state.value},\nprice: {self.price if self.price is not None else 'N/A'},\nredfinId: {self.redfinId},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
 if __name__ == "__main__":
