@@ -3,6 +3,7 @@ from typing import List, Dict
 
 # Zip codes to crawl
 ZIP_CODES: List[str] = [
+    "98109",
     # '98052',
     # '98034',
     # '98054',
