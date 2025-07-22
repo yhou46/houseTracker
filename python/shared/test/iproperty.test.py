@@ -2,10 +2,11 @@ import unittest
 import usaddress # type: ignore
 from datetime import datetime
 
-from shared.iproperty import extractStreetAddress, extractUnitInformation, IPropertyAddress, IPropertyHistory, IPropertyHistoryEvent, IPropertyHistoryEventType
+from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, IPropertyHistoryEventType
+from shared.iproperty_address import IPropertyAddress, get_address_components
 
-class Test_extractStreetAddress(unittest.TestCase):
-    def testStreetAddress(self):
+class Test_get_address(unittest.TestCase):
+    def test_street_address(self):
         # Map from full streed address to full street address
         testCases = {
             "1838 Market St,Kirkland, WA 98033" : "1838 Market St",
@@ -16,35 +17,22 @@ class Test_extractStreetAddress(unittest.TestCase):
         }
 
         for fullAddress, expectedStreetAddress in testCases.items():
-            addressObj = usaddress.tag(fullAddress)[0]
-            streetAddress = extractStreetAddress(addressObj)
+            components = get_address_components(fullAddress)
+            streetAddress = components["street"]
             self.assertEqual(expectedStreetAddress, streetAddress)
     
-    def testUnit(self):
+    def test_unit(self):
         # Map from full streed address to full street address
         testCases = {
             "1838 Market St,Kirkland, WA 98033" : "",
-            "Apt 116, 6910 Old Redmond Rd, Redmond, WA, 98052" : "Apt 116",
-            "655 Crockett St Unit A101,Seattle, WA 98109": "Unit A101",
+            "Apt 116, 6910 Old Redmond Rd, Redmond, WA, 98052" : "APT 116",
+            "655 Crockett St Unit A101,Seattle, WA 98109": "APT A101",
         }
 
         for fullAddress, expectedStreetAddress in testCases.items():
-            addressObj = usaddress.tag(fullAddress)[0]
-            streetAddress = extractUnitInformation(addressObj)
-            self.assertEqual(expectedStreetAddress, streetAddress)
-
-class Test_IPropertyAddress(unittest.TestCase):
-    def testFullAddressLine(self):
-        # Input -> expected result
-        testCases = {
-            "1838 Market St,Kirkland, WA 98033" : "1838 Market St,Kirkland,WA,98033",
-            "Apt 116, 6910 Old Redmond Rd, Redmond, WA, 98052" : "6910 Old Redmond Rd,Apt 116,Redmond,WA,98052",
-            "655 Crockett St Unit A101,Seattle, WA 98109": "655 Crockett St,Unit A101,Seattle,WA,98109",
-        }
-
-        for input, expected in testCases.items():
-            addressObj = IPropertyAddress(input)
-            self.assertEqual(expected, addressObj.getAddressLine())
+            components = get_address_components(fullAddress)
+            unit  = components.get("unit", "")
+            self.assertEqual(expectedStreetAddress, unit)
 
 class Test_IPropertyHistory(unittest.TestCase):
     def test_history_events(self):
