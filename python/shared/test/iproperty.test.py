@@ -2,7 +2,7 @@ import unittest
 import usaddress # type: ignore
 from datetime import datetime
 
-from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, IPropertyHistoryEventType
+from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, PropertyHistoryEventType
 from shared.iproperty_address import IPropertyAddress, get_address_components
 
 class Test_get_address(unittest.TestCase):
@@ -38,15 +38,15 @@ class Test_IPropertyHistory(unittest.TestCase):
     def test_history_events(self):
         address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
         events = [
-            IPropertyHistoryEvent(datetime(2022, 1, 1), IPropertyHistoryEventType.Listed, "Listed", 1000000),
-            IPropertyHistoryEvent(datetime(2022, 3, 1), IPropertyHistoryEventType.Sold, "Sold", 940000),
+            IPropertyHistoryEvent(datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", 1000000),
+            IPropertyHistoryEvent(datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", 940000),
         ]
         history = IPropertyHistory("test-id", address, events)
         self.assertEqual(len(history._history), 2)
-        history.addEvent(IPropertyHistoryEvent(datetime(2022, 2, 1), IPropertyHistoryEventType.PriceChange, "Price dropped", 950000))
+        history.addEvent(IPropertyHistoryEvent(datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", 950000))
         self.assertEqual(len(history._history), 3)
 
-        self.assertEqual(history._history[2]._eventType, IPropertyHistoryEventType.Sold)
+        self.assertEqual(history._history[2]._eventType, PropertyHistoryEventType.Sold)
 
 if __name__ == '__main__':
     unittest.main()
