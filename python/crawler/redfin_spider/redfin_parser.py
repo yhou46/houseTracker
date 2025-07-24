@@ -32,6 +32,14 @@ def extract_redfin_id(url: str) -> Optional[str]:
             return url_parts[home_index + 1]
     return None
 
+# Parse metadata from meta tags
+def parse_meta_tag(beautiful_soup: BeautifulSoup ,name: str) -> Optional[str]:
+    meta_tag = beautiful_soup.find("meta", attrs={"name": name})
+    if meta_tag and hasattr(meta_tag, 'attrs'):
+        attrs = meta_tag.attrs
+        if isinstance(attrs, dict) and "content" in attrs:
+            return str(attrs["content"])
+    return None
 
 def parse_property_details(html_content: str) -> Dict[str, Any]:
     """
@@ -62,24 +70,15 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
         if len(parts) >= 2:
             result['address'] = parts[0].strip()
     
-    # Parse metadata from meta tags
-    def parse_meta_tag(name: str) -> Optional[str]:
-        meta_tag = soup.find("meta", attrs={"name": name})
-        if meta_tag and hasattr(meta_tag, 'attrs'):
-            attrs = meta_tag.attrs
-            if isinstance(attrs, dict) and "content" in attrs:
-                return str(attrs["content"])
-        return None
-    
     # Parse bedrooms and bathrooms
-    beds = parse_meta_tag("twitter:text:beds")
+    beds = parse_meta_tag(soup, "twitter:text:beds")
     if beds:
         try:
             result['numberOfBedroom'] = float(beds)
         except ValueError:
             result['numberOfBedroom'] = None
     
-    baths = parse_meta_tag("twitter:text:baths")
+    baths = parse_meta_tag(soup, "twitter:text:baths")
     if baths:
         try:
             result['numberOfBathroom'] = float(baths)
@@ -87,7 +86,7 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
             result['numberOfBathroom'] = None
     
     # Parse square footage
-    sqft = parse_meta_tag("twitter:text:sqft")
+    sqft = parse_meta_tag(soup, "twitter:text:sqft")
     if sqft:
         sqft_clean = sqft.replace(",", "")
         try:
@@ -176,11 +175,47 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
     # Parse property status
     result['status'] = _parse_property_status(soup)
 
+    # Parse price
+    result['price'] = _parse_property_price(soup)
+
+    # Parse "Ready to Build" tag
+    result["readyToBuildTag"] = False
+    if result['yearBuilt'] == None:
+        result["readyToBuildTag"] = _parse_property_ready_to_build_tag(soup)
+
     # Parse property history using the same BeautifulSoup object
     property_history = parse_property_history(soup)
     result.update(property_history)
     
     return result
+
+# Example url: https://www.redfin.com/WA/Redmond/Redmond/Plan-2C/home/188825778
+def _parse_property_ready_to_build_tag(beautiful_soup: BeautifulSoup) -> bool:
+    script_tags = beautiful_soup.find_all("script")
+    keyword = "Ready to Build".lower()
+    for script in script_tags:
+        if script.string and keyword in script.string.lower():
+            return True
+    return False
+
+def _parse_property_price(beautiful_soup: BeautifulSoup) -> Optional[float]:
+    """
+    Parse property price from HTML content.
+
+    Args:
+        beautiful_soup: BeautifulSoup object of the property page
+
+    Returns:
+        Property price as a float, or None if not found
+    """
+    price_tag = parse_meta_tag(beautiful_soup, "twitter:text:price")
+    if price_tag:
+        sanitized_price_str = price_tag.replace("$", "").replace(",", "")
+        try:
+            return float(sanitized_price_str)
+        except ValueError:
+            return None
+    return None
 
 def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
     """
