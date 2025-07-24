@@ -65,15 +65,15 @@ class IPropertyDataStream(Iterator[IProperty]):
 
 class RedfinFileDataReader(IPropertyDataStream):
     def __init__(self, file_path: str):
-        self.file_path = file_path
-        self.fileObject = None
+        self._file_path = file_path
+        # self._fileObject: Any = None
 
     def initialize(self) -> None:
-        self.fileObject = open(self.file_path, 'r')
+        self._fileObject = open(self._file_path, 'r')
         # Initialize any other resources
 
     def next_entry(self) -> IProperty | None:
-        line = self.fileObject.readline()
+        line = self._fileObject.readline()
         if not line:
             return None
         
@@ -85,8 +85,8 @@ class RedfinFileDataReader(IPropertyDataStream):
         return property_object
 
     def close(self) -> None:
-        if self.fileObject:
-            self.fileObject.close()
+        if self._fileObject:
+            self._fileObject.close()
 
 def validate_redfin_property_entry(entry: RedfinPropertyEntry) -> None:
     if not entry.url or not isinstance(entry.url, str):
