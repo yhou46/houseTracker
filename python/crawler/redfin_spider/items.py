@@ -18,6 +18,8 @@ class RedfinPropertyItem(scrapy.Item):
     status = scrapy.Field()
     history = scrapy.Field()
     historyCount = scrapy.Field()
+    price = scrapy.Field()
+    readyToBuildTag = scrapy.Field()
     
     # Additional metadata
     url = scrapy.Field()
