@@ -137,4 +137,4 @@ if __name__ == "__main__":
     # test_parser_with_saved_file()
     
     # Test with live URL (uncomment to test)
-    test_parser_with_url("https://www.redfin.com/WA/Kenmore/8007-NE-147th-Ln-98028/home/12303835")
+    test_parser_with_url("https://www.redfin.com/WA/Bothell/1325-Seattle-Hill-Rd-98012/unit-F5/home/146123026")

@@ -26,11 +26,14 @@ class PropertyArea:
         return f"{self.area} {self.unit.value}"
 
 class PropertyType(Enum):
-    SingleFamily = "Single-family"
+    SingleFamily = "SingleFamily"
+    SingleFamilyOnWater = "SingleFamilyOnWater"
     Townhome = "Townhome"
     Condo = "Condo"
-    VacantLand = "Vacant-land"
-    MultiFamily = "Multi-family"
+    VacantLand = "VacantLand"
+    MultiFamily = "MultiFamily"
+    Manufactured = "Manufactured"
+    Coops = "Coops"
 
 # Deprecated
 def _extractStreetAddress(addressPropertyBag: dict) -> str:
@@ -166,7 +169,7 @@ class IPropertyBasic:
         lotArea: PropertyArea | None,
         numberOfBedrooms: float,
         numberOfBathrooms: float,
-        yearBuilt: int,
+        yearBuilt: int | None,
     ):
         self.id: str = id
         self.address: IPropertyAddress = IPropertyAddress(address)
@@ -204,7 +207,7 @@ class IProperty(IPropertyBasic):
         lotArea: PropertyArea | None,
         numberOfBedrooms: float,
         numberOfBathrooms: float,
-        yearBuilt: int,
+        yearBuilt: int | None,
         status: PropertyStatus,
         price: float | None,
         history: IPropertyHistory,
