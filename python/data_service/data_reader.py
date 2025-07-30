@@ -1,4 +1,5 @@
-from typing import Iterator
+from typing import Iterator, Callable, Any
+from enum import Enum
 import json
 import uuid
 from datetime import datetime
@@ -7,6 +8,7 @@ import os
 from crawler.redfin_spider.items import RedfinPropertyItem
 from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory
 from shared.iproperty_address import IPropertyAddress
+from shared.iproperty_address import InvalidAddressError
 
 class RedfinPropertyEntryTypeCheck:
     def __init__(self):
@@ -25,9 +27,10 @@ class RedfinPropertyEntry:
             lotArea: str | None,
             numberOfBedrooms: float | None,
             numberOfBathrooms: float | None,
-            yearBuilt: int,
+            yearBuilt: int | None,
             status: str,
             price: float | None,
+            readyToBuildTag: bool | None,
             ):
         self.url = url
         self.redfinId = redfinId
@@ -41,8 +44,43 @@ class RedfinPropertyEntry:
         self.yearBuilt = yearBuilt
         self.status = status
         self.price = price
+        self.readyToBuildTag = readyToBuildTag
+
+    def __str__(self):
+        return f"RedfinPropertyEntry(url={self.url}, redfinId={self.redfinId}, scrapedAt={self.scrapedAt}, address={self.address}, area={self.area}, propertyType={self.propertyType}, lotArea={self.lotArea}, numberOfBedrooms={self.numberOfBedrooms}, numberOfBathrooms={self.numberOfBathrooms}, yearBuilt={self.yearBuilt}, status={self.status}, price={self.price}, readyToBuildTag={self.readyToBuildTag})"
+
+class PropertyDataStreamParsingErrorCode(Enum):
+    VacantLandEncountered = "VacantLandEncountered",
+    UnknownPropertyType = "UnknownPropertyType",
+    UnknownAreaUnit = "UnknownAreaUnit",
+    UnknownPropertyStatus = "UnknownPropertyStatus",
+    InvalidPropertyDataFormat = "InvalidPropertyDataFormat",
+    InvalidPropertyDataType = "InvalidPropertyDataType",
+    InvalidPropertyAddress = "InvalidPropertyAddress",
+    MissingRequiredField = "MissingRequiredField",
+
+
+class PropertyDataStreamParsingError(Exception):
+    def __init__(self, message: str, original_data: Any, error_code: PropertyDataStreamParsingErrorCode, error_data: Any):
+        super().__init__(message)
+        self.original_data = original_data
+        self.error_code = error_code
+        self.error_data = error_data
+
+    def __str__(self):
+        return f"{self.__class__.__name__}: message={self.args}, error_code={self.error_code}, original_data={self.original_data}"
+
+PropertyDataStreamErrorHandlerType = Callable[[PropertyDataStreamParsingError], None]
+
+# Placeholder error handler that raises the error
+def empty_data_stream_error_handler(error: PropertyDataStreamParsingError) -> None:
+   raise error
 
 class IPropertyDataStream(Iterator[IProperty]):
+
+    def __init__(self, error_handler: PropertyDataStreamErrorHandlerType):
+        self._error_handler = error_handler
+
     def __iter__(self) -> Iterator[IProperty]:
         self.initialize()
         return self
@@ -54,17 +92,22 @@ class IPropertyDataStream(Iterator[IProperty]):
             raise StopIteration
         return entry
 
+    '''
+    Should return None when there are no more entries.
+    Raise exceptions for errors, which will be handled by the error handler.
+    '''
     def next_entry(self) -> IProperty | None:
         raise NotImplementedError("This method should be overridden by subclasses")
-    
+
     def initialize(self) -> None:
         raise NotImplementedError("This method should be overridden by subclasses")
-    
+
     def close(self) -> None:
         raise NotImplementedError("This method should be overridden by subclasses")
 
 class RedfinFileDataReader(IPropertyDataStream):
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, error_handler: PropertyDataStreamErrorHandlerType):
+        super().__init__(error_handler)
         self._file_path = file_path
         # self._fileObject: Any = None
 
@@ -73,16 +116,31 @@ class RedfinFileDataReader(IPropertyDataStream):
         # Initialize any other resources
 
     def next_entry(self) -> IProperty | None:
-        line = self._fileObject.readline()
-        if not line:
-            return None
-        
-        property_object = parse_json_str_to_property(line)
-        if property_object is None:
-            return self.next_entry()
+        try:
+            line = self._fileObject.readline().strip()
+            if not line:
+                return None
 
-        # Parse line into IProperty
-        return property_object
+            # Parse line into IProperty
+            property_object = parse_json_str_to_property(line)
+            # if property_object is None:
+            #     return self.next_entry()
+
+            # Parse line into IProperty
+            return property_object
+        except InvalidAddressError as error:
+            error_msg = f"Invalid address encountered: {str(error)}"
+            parsing_error = PropertyDataStreamParsingError(
+                message = error_msg,
+                original_data = line,
+                error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyAddress,
+                error_data = error.address,
+            )
+            self._error_handler(parsing_error)
+            return self.next_entry()
+        except PropertyDataStreamParsingError as e:
+            self._error_handler(e)
+            return self.next_entry()
 
     def close(self) -> None:
         if self._fileObject:
@@ -90,29 +148,105 @@ class RedfinFileDataReader(IPropertyDataStream):
 
 def validate_redfin_property_entry(entry: RedfinPropertyEntry) -> None:
     if not entry.url or not isinstance(entry.url, str):
-        raise ValueError(f"URL is missing or invalid: {entry.url}.")
+        error_msg = f"URL is missing or is not string type: {entry.url}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.url
+        )
     if not entry.redfinId or not isinstance(entry.redfinId, str):
-        raise ValueError(f"Redfin ID is missing or invalid: {entry.redfinId}.")
+        error_msg = f"Redfin ID is missing or is not string type: {entry.redfinId}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.redfinId
+        )
     if not entry.address or not isinstance(entry.address, str):
-        raise ValueError(f"Address is missing: {entry.address}.")
-    if not entry.redfinId or not isinstance(entry.redfinId, str):
-        raise ValueError(f"Redfin ID is missing: {entry.redfinId}.")
+        error_msg = f"Address is missing or is not string type: {entry.address}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.address
+        )
     if not entry.scrapedAt or not isinstance(entry.scrapedAt, str):
-        raise ValueError(f"Scraped at timestamp is missing: {entry.scrapedAt}.")
+        error_msg = f"Scraped at timestamp is missing or is not string type: {entry.scrapedAt}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.scrapedAt
+        )
+    if not entry.area:
+        error_msg = f"Area is missing: {entry.area} for address: {entry.address}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.MissingRequiredField,
+            error_data = entry.area
+        )
     if entry.area and not isinstance(entry.area, str):
-        raise ValueError(f"Area is missing: {entry.area}.")
+        error_msg = f"Area is not string type: {entry.area}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.area
+        )
     if not entry.propertyType or not isinstance(entry.propertyType, str):
-        raise ValueError(f"Property type is missing: {entry.propertyType}.")
+        error_msg = f"Property type is missing or is not string type: {entry.propertyType}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.propertyType
+        )
     if entry.numberOfBedrooms and not isinstance(entry.numberOfBedrooms, (int, float)):
-        raise ValueError(f"Number of bedrooms must be a float: {entry.numberOfBedrooms}.")
+        error_msg = f"Number of bedrooms is not a number: {entry.numberOfBedrooms}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.numberOfBedrooms
+        )
     if entry.numberOfBathrooms and not isinstance(entry.numberOfBathrooms, (int, float)):
-        raise ValueError(f"Number of bathrooms must be a float: {entry.numberOfBathrooms}.")
+        error_msg = f"Number of bathrooms is not a number: {entry.numberOfBathrooms}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.numberOfBathrooms
+        )
     if not isinstance(entry.yearBuilt, int):
-        raise ValueError(f"Year built must be an integer: {entry.yearBuilt}.")
+        if entry.readyToBuildTag != True:
+            error_msg = f"Year built is missing but property is not marked as ready to build. YearBuilt: {entry.yearBuilt}, readyToBuildTag: {entry.readyToBuildTag}."
+            raise PropertyDataStreamParsingError(
+                message = error_msg,
+                original_data = entry,
+                error_code = PropertyDataStreamParsingErrorCode.MissingRequiredField,
+                error_data = {
+                    "yearBuilt": entry.yearBuilt,
+                    "readyToBuildTag": entry.readyToBuildTag
+                }
+            )
     if not isinstance(entry.status, str):
-        raise ValueError(f"Status must be a string: {entry.status}.")
+        error_msg = f"Status is missing or is not string type: {entry.status}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.status
+        )
     if entry.price and not isinstance(entry.price, (int, float)):
-        raise ValueError(f"Price must be a number: {entry.price}.")
+        error_msg = f"Price is not a number: {entry.price}."
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data = entry,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataType,
+            error_data = entry.price
+        )
 
 def parse_json_str_to_property(line: str) -> IProperty | None:
     data = json.loads(line)
@@ -126,127 +260,183 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         lotArea=data.get('lotArea'),
         numberOfBedrooms=data.get('numberOfBedroom'),
         numberOfBathrooms=data.get('numberOfBathroom'),
-        yearBuilt=data.get('yearBuilt', 0),
+        yearBuilt=data.get('yearBuilt', None),
         status=data.get('status', 'Unknown'),
-        price=data.get('price', None)
+        price=data.get('price', None),
+        readyToBuildTag=data.get('readyToBuildTag', None),
     )
 
     id = str(uuid.uuid4())
 
-    try:
+    # Parse property type
+    if redfin_data.propertyType == "Townhome":
+        property_type = PropertyType.Townhome
+    elif redfin_data.propertyType == "Condo":
+        property_type = PropertyType.Condo
+    elif redfin_data.propertyType == "Single-family":
+        property_type = PropertyType.SingleFamily
+    elif redfin_data.propertyType == "Vacant land":
+        property_type = PropertyType.VacantLand
+    elif redfin_data.propertyType == "Multi-family":
+        property_type = PropertyType.MultiFamily
+    elif redfin_data.propertyType == "Manufactured":
+        property_type = PropertyType.Manufactured
+    elif redfin_data.propertyType == "Condo (co-op)":
+        property_type = PropertyType.Coops
+    elif redfin_data.propertyType == "Single Family Residence, 24 - Floating Home/On-Water Res":
+        property_type = PropertyType.SingleFamilyOnWater
+    else:
+        error_msg = f"Unknown property type: {redfin_data.propertyType} for data: {redfin_data.address}"
 
-        # Parse property type
-        if redfin_data.propertyType == "Townhome":
-            property_type = PropertyType.Townhome
-        elif redfin_data.propertyType == "Condo":
-            property_type = PropertyType.Condo
-        elif redfin_data.propertyType == "Single-family":
-            property_type = PropertyType.SingleFamily
-        elif redfin_data.propertyType == "Vacant land":
-            property_type = PropertyType.VacantLand
-        elif redfin_data.propertyType == "Multi-family":
-            property_type = PropertyType.MultiFamily
-        else:
-            raise ValueError(f"Unknown property type: {redfin_data.propertyType}")
-        
-        if property_type == PropertyType.VacantLand:
-            print(f"Vacant land property detected: {redfin_data.address}")
-            return None
-
-        validate_redfin_property_entry(redfin_data)
-        address = redfin_data.address
-        
-        # Parse area number and unit
-        area_parts = redfin_data.area.split(" ")
-        if len(area_parts) != 2:
-            raise ValueError(f"Invalid area format: {redfin_data.area}")
-        area_number = float(area_parts[0])
-        if area_parts[1].lower() == "sqft":
-            area_unit = AreaUnit.SquareFeet
-        elif area_parts[1].lower() == "acres":
-            area_unit = AreaUnit.Acres
-        elif area_parts[1].lower() == "sqm2":
-            area_unit = AreaUnit.SquareMeter
-        else:
-            raise ValueError(f"Unknown area unit: {area_parts[1]}")
-        area = PropertyArea(area_number, area_unit)
-        
-        # Parse lot area
-        lot_area = None
-        if redfin_data.lotArea:
-            lot_area_parts = redfin_data.lotArea.split(" ")
-            if len(lot_area_parts) != 2:
-                raise ValueError(f"Invalid lot area format: {redfin_data.lotArea}")
-            lot_area_number = float(lot_area_parts[0])
-            if lot_area_parts[1].lower() == "sqft":
-                lot_area_unit = AreaUnit.SquareFeet
-            elif lot_area_parts[1].lower() == "acres":
-                lot_area_unit = AreaUnit.Acres
-            elif lot_area_parts[1].lower() == "sqm2":
-                lot_area_unit = AreaUnit.SquareMeter
-            else:
-                raise ValueError(f"Unknown lot area unit: {lot_area_parts[1]}")
-            lot_area = PropertyArea(lot_area_number, lot_area_unit)
-        
-        # Parse number of bedrooms and bathrooms
-        number_of_bedrooms = float(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
-        number_of_bathrooms = float(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
-        year_built = redfin_data.yearBuilt
-
-        # Parse status
-        if redfin_data.status == "Active":
-            status = PropertyStatus.Active
-        elif redfin_data.status == "Pending":
-            status = PropertyStatus.Pending
-        elif redfin_data.status == "Sold":
-            status = PropertyStatus.Sold
-        else:
-            raise ValueError(f"Unknown property status: {redfin_data.status}")
-
-        # Parse price
-        price = redfin_data.price
-
-        # Create data source
-        data_source = [
-            IPropertyDataSource(
-                sourceId = redfin_data.redfinId,
-                sourceUrl = redfin_data.url,
-                sourceName = "Redfin"
-            )
-        ]
-
-        # Parse last update time
-        last_updated = datetime.fromisoformat(redfin_data.scrapedAt)
-
-        # Parse property history
-        history = IPropertyHistory(id, IPropertyAddress(address), [])
-
-        # Validate some logic
-        if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
-            raise ValueError("Number of bedrooms and bathrooms must be provided for non-vacant land properties.")
-
-        # Create property object
-        property = IProperty(
-            id = id,
-            address = address,
-            area = area,
-            propertyType = property_type,
-            lotArea = lot_area,
-            numberOfBedrooms = number_of_bedrooms,
-            numberOfBathrooms = number_of_bathrooms,
-            yearBuilt = year_built,
-            status = status,
-            price = price,
-            history = history,
-            dataSource = data_source,
-            lastUpdated = last_updated
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data=line,
+            error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyType,
+            error_data = redfin_data.propertyType,
         )
-        return property
 
-    except ValueError as e:
-        raise ValueError(f"Failed to parse property: {line}, error: {str(e)}")
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error while parsing property: {line}, error: {str(e)}")
+    if property_type == PropertyType.VacantLand:
+        error_msg = f"Vacant land property detected: {redfin_data.address}"
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data=line,
+            error_code = PropertyDataStreamParsingErrorCode.VacantLandEncountered,
+            error_data=None,
+        )
+
+    validate_redfin_property_entry(redfin_data)
+    address = redfin_data.address
+
+    # Parse area number and unit
+    area_parts = redfin_data.area.split(" ")
+    if len(area_parts) != 2:
+        error_msg = f"Invalid area format: {redfin_data.area} for address: {redfin_data.address}"
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data=line,
+            error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
+            error_data = redfin_data.area,
+        )
+    area_number = float(area_parts[0])
+    if area_parts[1].lower() == "sqft":
+        area_unit = AreaUnit.SquareFeet
+    elif area_parts[1].lower() == "acres":
+        area_unit = AreaUnit.Acres
+    elif area_parts[1].lower() == "sqm2":
+        area_unit = AreaUnit.SquareMeter
+    else:
+        error_msg = f"Unknown area unit: {area_parts[1]} for address: {redfin_data.address}"
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data=line,
+            error_code = PropertyDataStreamParsingErrorCode.UnknownAreaUnit,
+            error_data = area_parts[1],
+        )
+    area = PropertyArea(area_number, area_unit)
+
+    # Parse lot area
+    lot_area = None
+    if redfin_data.lotArea:
+        lot_area_parts = redfin_data.lotArea.split(" ")
+        if len(lot_area_parts) < 2:
+            error_msg = f"Invalid lot area format: {redfin_data.lotArea} for address: {redfin_data.address}"
+            raise PropertyDataStreamParsingError(
+                message = error_msg,
+                original_data=line,
+                error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
+                error_data = redfin_data.lotArea,
+            )
+        lot_area_number = float(lot_area_parts[0])
+        normalized_unit = "".join(lot_area_parts[1:]).lower()
+        if normalized_unit == "sqft" or normalized_unit == "squarefeet":
+            lot_area_unit = AreaUnit.SquareFeet
+        elif normalized_unit == "acres":
+            lot_area_unit = AreaUnit.Acres
+        elif normalized_unit == "sqm2":
+            lot_area_unit = AreaUnit.SquareMeter
+        else:
+            error_msg = f"Unknown lot area unit: {lot_area_parts[1]} for address: {redfin_data.address}"
+            raise PropertyDataStreamParsingError(
+                message = error_msg,
+                original_data=line,
+                error_code = PropertyDataStreamParsingErrorCode.UnknownAreaUnit,
+                error_data = lot_area_parts[1],
+            )
+        lot_area = PropertyArea(lot_area_number, lot_area_unit)
+
+    # Parse number of bedrooms and bathrooms
+    number_of_bedrooms = float(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
+    number_of_bathrooms = float(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
+    year_built = redfin_data.yearBuilt
+
+    # Parse status
+    if redfin_data.status == "Active":
+        status = PropertyStatus.Active
+    elif redfin_data.status == "Pending":
+        status = PropertyStatus.Pending
+    elif redfin_data.status == "Sold":
+        status = PropertyStatus.Sold
+    else:
+        error_msg = f"Unknown property status: {redfin_data.status} for address: {redfin_data.address}"
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data=line,
+            error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyStatus,
+            error_data = redfin_data.status,
+        )
+
+    # Parse price
+    price = redfin_data.price
+
+    # Create data source
+    data_source = [
+        IPropertyDataSource(
+            sourceId = redfin_data.redfinId,
+            sourceUrl = redfin_data.url,
+            sourceName = "Redfin"
+        )
+    ]
+
+    # Parse last update time
+    last_updated = datetime.fromisoformat(redfin_data.scrapedAt)
+
+    # Parse property history
+    history = IPropertyHistory(id, IPropertyAddress(address), [])
+
+    # Validate some logic
+    if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
+        error_msg = f"Number of bedrooms and bathrooms must be provided for non-vacant land properties: {redfin_data.address}"
+        raise PropertyDataStreamParsingError(
+            message = error_msg,
+            original_data=line,
+            error_code = PropertyDataStreamParsingErrorCode.MissingRequiredField,
+            error_data = {
+                "propertyType": property_type,
+                "numberOfBedrooms": number_of_bedrooms,
+                "numberOfBathrooms": number_of_bathrooms
+            },
+        )
+
+    # Create property object
+    property = IProperty(
+        id = id,
+        address = address,
+        area = area,
+        propertyType = property_type,
+        lotArea = lot_area,
+        numberOfBedrooms = number_of_bedrooms,
+        numberOfBathrooms = number_of_bathrooms,
+        yearBuilt = year_built,
+        status = status,
+        price = price,
+        history = history,
+        dataSource = data_source,
+        lastUpdated = last_updated
+    )
+    return property
+
+
+
 
 if __name__ == "__main__":
     # Get the directory of the current script (data_reader.py)
@@ -254,11 +444,25 @@ if __name__ == "__main__":
 
     # Go up two levels to the project root, then into redfin_output
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250722_183208.jsonl")
+    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250729_184946.jsonl")
     print(redfin_output_path)
 
-    reader = RedfinFileDataReader(redfin_output_path)
-    count = 0
-    for property in reader:
-        count += 1
-        print(f"{property}\nCount: {count}\n")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
+
+    print(f"Starting to read Redfin data from {redfin_output_path}. Error file: {error_log_file}")
+
+    with open(error_log_file, 'w', encoding='utf-8') as error_file:
+        def file_error_handler(error: PropertyDataStreamParsingError) -> None:
+            error_msg = f"{datetime.now().isoformat()} - {str(error)}\n"
+            error_file.write(error_msg)
+            error_file.flush()
+
+        reader: IPropertyDataStream = RedfinFileDataReader(redfin_output_path, file_error_handler)
+        count = 0
+
+        for property in reader:
+            count += 1
+            if count % 100 == 0:
+                print(f"Processed {count} properties...")
+        print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")

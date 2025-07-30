@@ -1,6 +1,5 @@
 from enum import Enum
 from typing import List, Dict
-
 import logging
 
 import usaddress # type: ignore
@@ -74,6 +73,14 @@ def get_street_address(address: str, logger: logging.Logger | None = None) -> st
 def get_unit_information(address: str, logger: logging.Logger | None = None) -> str:
     return get_address_components(address, logger).get("unit", "")
 
+class InvalidAddressError(Exception):
+    def __init__(self, message: str, address: str):
+        super().__init__(message)
+        self.address = address
+
+    def __str__(self):
+        return super().__str__() + f"Address: {self.address})"
+
 def get_address_components(address: str, logger: logging.Logger | None = None) -> Dict[str, str]:
     try:
         components: Dict[str, str] = {}
@@ -133,7 +140,7 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
             logger.error(error_msg)
         else:
             print(error_msg)
-        raise Exception(error_msg)
+        raise InvalidAddressError(error_msg, address)
 
 # Convert address string to a hash string
 def get_address_hash(address: str, logger: logging.Logger | None = None) -> str:
