@@ -89,7 +89,7 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
         addressPropertyBag = parsedAddress[0]
 
         addressType: str = parsedAddress[1]
-        if (addressType != AddressType.StreetAddress.value):
+        if (addressType != AddressType.StreetAddress.value and addressType != AddressType.Intersection.value):
             raise ValueError(f"Invalid address type: {addressType} for address: {address}")
 
         # Extract components
