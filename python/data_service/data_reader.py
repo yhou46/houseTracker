@@ -1,4 +1,4 @@
-from typing import Iterator, Callable, Any
+from typing import Iterator, Callable, Any, Dict
 from enum import Enum
 import json
 import uuid
@@ -6,7 +6,8 @@ from datetime import datetime
 import os
 
 from crawler.redfin_spider.items import RedfinPropertyItem
-from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory
+from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent
+
 from shared.iproperty_address import IPropertyAddress
 from shared.iproperty_address import InvalidAddressError
 
@@ -248,6 +249,80 @@ def validate_redfin_property_entry(entry: RedfinPropertyEntry) -> None:
             error_data = entry.price
         )
 
+def parse_property_history(data: Dict[str, Any], property_id: str, address: IPropertyAddress) -> IPropertyHistory:
+    if not isinstance(data, dict):
+        raise ValueError("Data must be a dictionary")
+    history_list = data.get('history', [])
+    property_history: IPropertyHistory = IPropertyHistory(property_id, address, [])
+    for event in history_list:
+        if not isinstance(event, dict):
+            raise ValueError("Each history event must be a dictionary")
+
+        # Parse date
+        date_str = event.get('date')
+        if not date_str or not isinstance(date_str, str):
+            raise ValueError("Event date is missing or not a string")
+        date_obj = datetime.strptime(date_str, "%b %d, %Y")
+
+        # Parse price
+        price = event.get('price')
+        if price != None and not isinstance(price, (int, float)):
+            raise ValueError("Event price is not a number")
+
+        # Parse event type
+        description = event.get('description')
+        event_type = PropertyHistoryEventType.Other
+        if not isinstance(description, str):
+            raise ValueError("Event description is missing or not a string")
+
+        if description.lower().startswith("listed"):
+            event_type = PropertyHistoryEventType.Listed
+        elif description.lower().startswith("sold"):
+            event_type = PropertyHistoryEventType.Sold
+        elif description.lower().startswith("price changed"):
+            event_type = PropertyHistoryEventType.PriceChange
+        elif description.lower().startswith("pending"):
+            event_type = PropertyHistoryEventType.Pending
+        elif description.lower().startswith("relisted"):
+            event_type = PropertyHistoryEventType.ReListed
+        elif description.lower().startswith("delisted"):
+            event_type = PropertyHistoryEventType.DeListed
+        elif description.lower().startswith("contingent"):
+            event_type = PropertyHistoryEventType.Contingent
+        elif description.lower().startswith("listed for rent"):
+            event_type = PropertyHistoryEventType.ListedForRent
+        elif description.lower().startswith("rental removed"):
+            event_type = PropertyHistoryEventType.RentalRemoved
+        else:
+            raise ValueError(f"Unknown event description: {description}")
+
+        if event_type == PropertyHistoryEventType.PriceChange and price is None:
+            print(f"Warning: PriceChange event without price on {date_str} for property {property_id}, address {address.get_address_hash()}")
+
+        # Parse source and sourceId
+        source = event.get('source')
+        if source != None and isinstance(source, str):
+            # raise ValueError("Event source is not a string")
+            source = source.lower()
+        else:
+            raise ValueError("Event source is missing or not a string")
+        source_id = event.get("mlsNumber")
+        if source_id != None and not isinstance(source_id, str):
+            source_id = str(source_id)
+
+        # Create event
+        history_event: IPropertyHistoryEvent = IPropertyHistoryEvent(
+            datetime=date_obj,
+            eventType=event_type,
+            description=description,
+            source=source,
+            sourceId=source_id,
+            price=price,
+        )
+        property_history.addEvent(history_event)
+
+    return property_history
+
 def parse_json_str_to_property(line: str) -> IProperty | None:
     data = json.loads(line)
     redfin_data = RedfinPropertyEntry(
@@ -266,7 +341,7 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         readyToBuildTag=data.get('readyToBuildTag', None),
     )
 
-    id = str(uuid.uuid4())
+    property_id = str(uuid.uuid4())
 
     # Parse property type
     if redfin_data.propertyType == "Townhome":
@@ -305,7 +380,9 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         )
 
     validate_redfin_property_entry(redfin_data)
-    address = redfin_data.address
+
+    # Parse address
+    address = IPropertyAddress(redfin_data.address)
 
     # Parse area number and unit
     area_parts = redfin_data.area.split(" ")
@@ -400,9 +477,6 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
     # Parse last update time
     last_updated = datetime.fromisoformat(redfin_data.scrapedAt)
 
-    # Parse property history
-    history = IPropertyHistory(id, IPropertyAddress(address), [])
-
     # Validate some logic
     if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
         error_msg = f"Number of bedrooms and bathrooms must be provided for non-vacant land properties: {redfin_data.address}"
@@ -417,9 +491,12 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
             },
         )
 
+    # Parse property history
+    history = parse_property_history(data, property_id, address)
+
     # Create property object
     property = IProperty(
-        id = id,
+        id = property_id,
         address = address,
         area = area,
         propertyType = property_type,
@@ -444,7 +521,7 @@ if __name__ == "__main__":
 
     # Go up two levels to the project root, then into redfin_output
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250729_184946.jsonl")
+    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250730_193138.jsonl")
     print(redfin_output_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -463,6 +540,7 @@ if __name__ == "__main__":
 
         for property in reader:
             count += 1
+            print(property)
             if count % 100 == 0:
                 print(f"Processed {count} properties...")
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")

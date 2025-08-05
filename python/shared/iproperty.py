@@ -69,6 +69,9 @@ class PropertyHistoryEventType(Enum):
     Pending = "Pending"
     PriceChange = "PriceChange"
     Sold = "Sold"
+    Contingent = "Contingent"
+    ListedForRent = "ListedForRent"
+    RentalRemoved = "RentalRemoved"
     Other = "Other"
 
 class IPropertyHistoryEvent:
@@ -87,9 +90,6 @@ class IPropertyHistoryEvent:
         self._price = price
         self._source = source
         self._sourceId = sourceId
-
-        if eventType == PropertyHistoryEventType.PriceChange and price is None:
-            raise ValueError("Price must be provided for PriceChange event type")
     
     @property
     def datetime(self) -> datetime:
@@ -121,13 +121,13 @@ class IPropertyHistoryEvent:
 class IPropertyHistory:
     def __init__(
             self,
-            id: str,
+            property_id: str,
             address: IPropertyAddress,
             history: List[IPropertyHistoryEvent] | None = None,
             lastUpdated: datetime | None = None
             ):
         self._history = history if history is not None else []
-        self._id = id
+        self._property_id = property_id
         self._address = address
         self._lastUpdated = lastUpdated if lastUpdated is not None else datetime.now(timezone.utc)
 
@@ -138,7 +138,7 @@ class IPropertyHistory:
 
     @property
     def id(self) -> str:
-        return self._id
+        return self._property_id
 
     @property
     def address(self) -> IPropertyAddress:
@@ -154,7 +154,7 @@ class IPropertyHistory:
 
     def __str__(self):
         historyStr = "\n".join(str(event) for event in self._history)
-        return f"Property ID: {self._id},\nAddress: {self._address.getAddressLine()},\nHistory:\n{historyStr if historyStr else 'No history available'},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"Property ID: {self._property_id},\nAddress: {self._address.get_address_hash()},\nHistory:\n{historyStr if historyStr else 'No history available'},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}"
 
 # TODO:
 # How to deal with vacant land? It has many properties as none, like numberOfBedrooms, numberOfBathrooms, yearBuilt, etc.
@@ -163,7 +163,7 @@ class IPropertyBasic:
     def __init__(
         self,
         id: str,
-        address: str,
+        address: IPropertyAddress,
         area: PropertyArea,
         propertyType: PropertyType,
         lotArea: PropertyArea | None,
@@ -172,7 +172,7 @@ class IPropertyBasic:
         yearBuilt: int | None,
     ):
         self.id: str = id
-        self.address: IPropertyAddress = IPropertyAddress(address)
+        self.address = address
         self.area = area
         self.propertyType = propertyType
         self.lotArea = lotArea
@@ -201,7 +201,7 @@ class IProperty(IPropertyBasic):
     def __init__(
         self,
         id: str,
-        address: str,
+        address: IPropertyAddress,
         area: PropertyArea,
         propertyType: PropertyType,
         lotArea: PropertyArea | None,
@@ -228,7 +228,7 @@ class IProperty(IPropertyBasic):
     def __str__(self):
         return (
             super().__str__() +
-            f", \nstate: {self.status.value},\nprice: {self.price if self.price is not None else 'N/A'},\nredfinId: {",".join(str(source)for source in self.dataSource)},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}"
+            f",\nstate: {self.status.value},\nprice: {self.price if self.price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self.dataSource)},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}\nhistory:\n{self.history}\n"
         )
 
 if __name__ == "__main__":
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     propertyId = uuid.uuid4()
     property1 = IPropertyBasic(
         str(propertyId),
-        address,
+        IPropertyAddress(address),
         PropertyArea(1700, AreaUnit.SquareFeet),
         PropertyType.SingleFamily,
         area,
