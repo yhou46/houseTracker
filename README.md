@@ -10,6 +10,26 @@
 
 ## Goals
 ### Read
+- Input: id, return full property info with history
+- Input: address as string, return full property info with history
+- Input: status: open, propertyType: singleFamily, price: below 1.5M, number_of_bed >= 3, zip_code: []
+Return full property history
+
+- Property Fields:
+id: str,
+addressHash -> string
+area: PropertyArea -> number (convert to sqrt)
+propertyType: PropertyType -> string
+lotArea: PropertyArea | None,
+numberOfBedrooms: float,
+numberOfBathrooms: float,
+yearBuilt: int | None,
+status: PropertyStatus, -> string
+price: float | None,
+history: IPropertyHistory,
+lastUpdated: datetime,
+dataSource: List[IPropertyDataSource] = [],
+
 - Search by different criterias
     - property type
     - number of bedroom
