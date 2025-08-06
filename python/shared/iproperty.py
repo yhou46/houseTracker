@@ -77,6 +77,7 @@ class PropertyHistoryEventType(Enum):
 class IPropertyHistoryEvent:
     def __init__(
             self,
+            id: str,
             datetime: datetime,
             event_type: PropertyHistoryEventType,
             description: str,
@@ -84,6 +85,7 @@ class IPropertyHistoryEvent:
             source_id: str | None = None,
             price: float | None = None,
             ):
+        self._id = id
         self._datetime = datetime
         self._event_type = event_type
         self._description = description
@@ -91,7 +93,10 @@ class IPropertyHistoryEvent:
         self._source = source
         self._source_id = source_id
         self._id = str(uuid.uuid4())  # Unique ID for the event
-    
+
+    @property
+    def id(self) -> str:
+        return self._id
     @property
     def datetime(self) -> datetime:
         return self._datetime
@@ -105,9 +110,6 @@ class IPropertyHistoryEvent:
     def price(self) -> float | None:
         return self._price
     @property
-    def id(self) -> str:
-        return self._id
-    @property
     def source(self) -> str | None:
         return self._source
     @property
@@ -115,7 +117,7 @@ class IPropertyHistoryEvent:
         return self._source_id
 
     def __str__(self):
-        return f"Date: {self.datetime.strftime('%Y-%m-%d')}, Event: {self.event_type.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}, Source: {self._source if self._source else 'N/A'}, Source ID: {self._source_id if self._source_id else 'N/A'}"
+        return f"Date: {self.datetime.strftime('%Y-%m-%d')}, Event: {self.event_type.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}, Source: {self.source if self.source else 'N/A'}, Source ID: {self.source_id if self.source_id else 'N/A'}, id: {self.id}"
 
     def __eq__(self, other):
         if not isinstance(other, IPropertyHistoryEvent):
