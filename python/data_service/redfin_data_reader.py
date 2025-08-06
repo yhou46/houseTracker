@@ -517,9 +517,6 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
     )
     return property
 
-
-
-
 if __name__ == "__main__":
     # Get the directory of the current script (data_reader.py)
     current_dir = os.path.dirname(os.path.abspath(__file__))
