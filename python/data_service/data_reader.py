@@ -302,7 +302,6 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
         # Parse source and sourceId
         source = event.get('source')
         if source != None and isinstance(source, str):
-            # raise ValueError("Event source is not a string")
             source = source.lower()
         else:
             raise ValueError("Event source is missing or not a string")
@@ -313,13 +312,17 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
         # Create event
         history_event: IPropertyHistoryEvent = IPropertyHistoryEvent(
             datetime=date_obj,
-            eventType=event_type,
+            event_type=event_type,
             description=description,
             source=source,
-            sourceId=source_id,
+            source_id=source_id,
             price=price,
         )
-        property_history.addEvent(history_event)
+        if history_event in property_history.history:
+            # Add event to history if not already present
+            print(f"Found duplicate event: {history_event} for property {property_id}, address {address}")
+        else:
+            property_history.addEvent(history_event)
 
     return property_history
 
@@ -468,9 +471,9 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
     # Create data source
     data_source = [
         IPropertyDataSource(
-            sourceId = redfin_data.redfinId,
-            sourceUrl = redfin_data.url,
-            sourceName = "Redfin"
+            source_id = redfin_data.redfinId,
+            source_url = redfin_data.url,
+            source_name = "Redfin"
         )
     ]
 
@@ -499,16 +502,16 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         id = property_id,
         address = address,
         area = area,
-        propertyType = property_type,
-        lotArea = lot_area,
-        numberOfBedrooms = number_of_bedrooms,
-        numberOfBathrooms = number_of_bathrooms,
-        yearBuilt = year_built,
+        property_type = property_type,
+        lot_area = lot_area,
+        number_of_bedrooms = number_of_bedrooms,
+        number_of_bathrooms = number_of_bathrooms,
+        year_built = year_built,
         status = status,
         price = price,
         history = history,
-        dataSource = data_source,
-        lastUpdated = last_updated
+        data_sources = data_source,
+        last_updated = last_updated
     )
     return property
 

@@ -46,7 +46,7 @@ class Test_IPropertyHistory(unittest.TestCase):
         history.addEvent(IPropertyHistoryEvent(datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", 950000))
         self.assertEqual(len(history._history), 3)
 
-        self.assertEqual(history._history[2]._eventType, PropertyHistoryEventType.Sold)
+        self.assertEqual(history._history[2]._event_type, PropertyHistoryEventType.Sold)
 
 if __name__ == '__main__':
     unittest.main()
