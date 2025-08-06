@@ -85,24 +85,24 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
     try:
         components: Dict[str, str] = {}
         # Parse address string
-        parsedAddress = usaddress.tag(address)
-        addressPropertyBag = parsedAddress[0]
+        parsed_address = usaddress.tag(address)
+        address_property_bag = parsed_address[0]
 
-        addressType: str = parsedAddress[1]
-        if (addressType != AddressType.StreetAddress.value and addressType != AddressType.Intersection.value):
-            raise ValueError(f"Invalid address type: {addressType} for address: {address}")
+        address_type: str = parsed_address[1]
+        if (address_type != AddressType.StreetAddress.value and address_type != AddressType.Intersection.value):
+            raise ValueError(f"Invalid address type: {address_type} for address: {address}")
 
         # Extract components
         # Street address
         # Build street part with abbreviation normalization
         street_components = [
-            addressPropertyBag.get("AddressNumber", ""),
-            addressPropertyBag.get("AddressNumberPrefix", ""),
-            _abbreviate_word(addressPropertyBag.get("StreetNamePreDirectional", ""), directional_abbr),
-            addressPropertyBag.get("StreetNamePreType", ""),
-            addressPropertyBag.get("StreetName", ""),
-            _abbreviate_word(addressPropertyBag.get("StreetNamePostType", ""), suffix_abbr),
-            _abbreviate_word(addressPropertyBag.get("StreetNamePostDirectional", ""), directional_abbr)
+            address_property_bag.get("AddressNumber", ""),
+            address_property_bag.get("AddressNumberPrefix", ""),
+            _abbreviate_word(address_property_bag.get("StreetNamePreDirectional", ""), directional_abbr),
+            address_property_bag.get("StreetNamePreType", ""),
+            address_property_bag.get("StreetName", ""),
+            _abbreviate_word(address_property_bag.get("StreetNamePostType", ""), suffix_abbr),
+            _abbreviate_word(address_property_bag.get("StreetNamePostDirectional", ""), directional_abbr)
         ]
 
         street = " ".join(filter(None, street_components))
@@ -111,8 +111,8 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
         # Unit information
         # Build unit part
         unit_components = [
-            _abbreviate_word(addressPropertyBag.get("OccupancyType", ""), unit_abbr),
-            addressPropertyBag.get("OccupancyIdentifier", "")
+            _abbreviate_word(address_property_bag.get("OccupancyType", ""), unit_abbr),
+            address_property_bag.get("OccupancyIdentifier", "")
         ]
         
         # Handle # and Apt/Unit variations, # 116 -> APT 116
@@ -124,13 +124,13 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
             components["unit"] = unit
 
         # City, state, zip
-        city = addressPropertyBag.get("PlaceName", "")
+        city = address_property_bag.get("PlaceName", "")
         components["city"] = city
 
-        state = addressPropertyBag.get("StateName", "")
+        state = address_property_bag.get("StateName", "")
         components["state"] = state
 
-        zipcode = addressPropertyBag.get("ZipCode", "")
+        zipcode = address_property_bag.get("ZipCode", "")
         components["zipcode"] = zipcode
         return components
     except Exception as e:
@@ -176,7 +176,7 @@ class IPropertyAddress:
 
         if components.get("street") is None or components.get("street") == "":
             raise ValueError(f"Invalid address: {address}. Street address is required.")
-        self._streetName: str = components["street"]
+        self._street_name: str = components["street"]
         self._unit: str = components.get("unit", "")
 
         if components.get("city") is None or components.get("city") == "":
@@ -189,14 +189,14 @@ class IPropertyAddress:
 
         if components.get("zipcode") is None or components.get("zipcode") == "":
             raise ValueError(f"Invalid address: {address}. Zip code is required.")
-        self._zipCode: str = components["zipcode"]
+        self._zip_code: str = components["zipcode"]
 
-        self._addressHash: str = get_address_hash(address, logger)
+        self._address_hash: str = get_address_hash(address, logger)
 
 
     @property
-    def streetName(self) -> str:
-        return self._streetName
+    def street_name(self) -> str:
+        return self._street_name
 
     @property
     def unit(self) -> str:
@@ -211,21 +211,21 @@ class IPropertyAddress:
         return self._city
 
     @property
-    def zipCode(self) -> str:
-        return self._zipCode
+    def zip_code(self) -> str:
+        return self._zip_code
 
     def get_address_hash(self) -> str:
-        return self._addressHash
+        return self._address_hash
 
     # This is index related
     def __eq__(self, other):
         if not isinstance(other, IPropertyAddress):
             return NotImplemented
-        return self._addressHash == other._addressHash
+        return self._address_hash == other._address_hash
 
     def __str__(self):
-        return f"AddressHash: {self._addressHash}, Street: {self.streetName}, UnitNumber(if any): {self._unit}, State: {self._state}, ZipCode: {self._zipCode}"
+        return f"AddressHash: {self._address_hash}, Street: {self.street_name}, UnitNumber(if any): {self._unit}, State: {self._state}, ZipCode: {self._zip_code}"
 
 if __name__ == "__main__":
-    addressStr = "6910 Old Redmond Road unit 116, Redmond, WA 98052"
-    print(f"Input: {addressStr}, Hashed: {get_address_hash(addressStr)}")
+    address_str = "6910 Old Redmond Road unit 116, Redmond, WA 98052"
+    print(f"Input: {address_str}, Hashed: {get_address_hash(address_str)}")

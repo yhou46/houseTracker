@@ -36,8 +36,8 @@ class PropertyType(Enum):
     Coops = "Coops"
 
 # Deprecated
-def _extractStreetAddress(addressPropertyBag: dict) -> str:
-    addressTags = set({
+def _extractStreetAddress(address_property_bag: dict) -> str:
+    address_tags = set({
         "AddressNumber",
         "AddressNumberPrefix",
         "AddressNumberSuffix",
@@ -56,11 +56,11 @@ def _extractStreetAddress(addressPropertyBag: dict) -> str:
         "SubaddressIdentifier",
         "SubaddressType",
     })
-    streetAddress: str = ""
-    for key, value in addressPropertyBag.items():
-        if key in addressTags:
-            streetAddress += (" " if len(streetAddress) > 0 else "") + value
-    return streetAddress
+    street_address: str = ""
+    for key, value in address_property_bag.items():
+        if key in address_tags:
+            street_address += (" " if len(street_address) > 0 else "") + value
+    return street_address
 
 class PropertyHistoryEventType(Enum):
     Listed = "Listed"
@@ -78,44 +78,53 @@ class IPropertyHistoryEvent:
     def __init__(
             self,
             datetime: datetime,
-            eventType: PropertyHistoryEventType,
+            event_type: PropertyHistoryEventType,
             description: str,
             source: str | None = None,
-            sourceId: str | None = None,
+            source_id: str | None = None,
             price: float | None = None,
             ):
         self._datetime = datetime
-        self._eventType = eventType
+        self._event_type = event_type
         self._description = description
         self._price = price
         self._source = source
-        self._sourceId = sourceId
+        self._source_id = source_id
+        self._id = str(uuid.uuid4())  # Unique ID for the event
     
     @property
     def datetime(self) -> datetime:
         return self._datetime
     @property
-    def eventType(self) -> PropertyHistoryEventType:
-        return self._eventType
+    def event_type(self) -> PropertyHistoryEventType:
+        return self._event_type
     @property
     def description(self) -> str:
         return self._description
     @property
     def price(self) -> float | None:
         return self._price
+    @property
+    def id(self) -> str:
+        return self._id
+    @property
+    def source(self) -> str | None:
+        return self._source
+    @property
+    def source_id(self) -> str | None:
+        return self._source_id
 
     def __str__(self):
-        return f"Date: {self.datetime.strftime('%Y-%m-%d')}, Event: {self.eventType.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}"
+        return f"Date: {self.datetime.strftime('%Y-%m-%d')}, Event: {self.event_type.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}, Source: {self._source if self._source else 'N/A'}, Source ID: {self._source_id if self._source_id else 'N/A'}"
 
     def __eq__(self, other):
         if not isinstance(other, IPropertyHistoryEvent):
             return NotImplemented
         return (self._datetime == other._datetime and
-                self._eventType == other._eventType and
-                self._description == other._description and
+                self._event_type == other._event_type and
                 self._price == other._price and
                 self._source == other._source and
-                self._sourceId == other._sourceId)
+                self._source_id == other._source_id)
 
 # All prices are in USD
 class IPropertyHistory:
@@ -124,17 +133,17 @@ class IPropertyHistory:
             property_id: str,
             address: IPropertyAddress,
             history: List[IPropertyHistoryEvent] | None = None,
-            lastUpdated: datetime | None = None
+            last_updated: datetime | None = None
             ):
         self._history = history if history is not None else []
         self._property_id = property_id
         self._address = address
-        self._lastUpdated = lastUpdated if lastUpdated is not None else datetime.now(timezone.utc)
+        self._last_updated = last_updated if last_updated is not None else datetime.now(timezone.utc)
 
     def addEvent(self, event: IPropertyHistoryEvent):
         self._history.append(event)
         self._history.sort(key = lambda event: event._datetime) # Sort by date
-        self._lastUpdated = datetime.now(timezone.utc)
+        self._last_updated = datetime.now(timezone.utc)
 
     @property
     def id(self) -> str:
@@ -149,12 +158,12 @@ class IPropertyHistory:
         return self._history
 
     @property
-    def lastUpdated(self) -> datetime:
-        return self._lastUpdated
+    def last_updated(self) -> datetime:
+        return self._last_updated
 
     def __str__(self):
-        historyStr = "\n".join(str(event) for event in self._history)
-        return f"Property ID: {self._property_id},\nAddress: {self._address.get_address_hash()},\nHistory:\n{historyStr if historyStr else 'No history available'},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}"
+        history_str = "\n".join(str(event) for event in self._history)
+        return f"Property ID: {self._property_id},\nAddress: {self._address.get_address_hash()},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
 
 # TODO:
 # How to deal with vacant land? It has many properties as none, like numberOfBedrooms, numberOfBathrooms, yearBuilt, etc.
@@ -165,23 +174,23 @@ class IPropertyBasic:
         id: str,
         address: IPropertyAddress,
         area: PropertyArea,
-        propertyType: PropertyType,
-        lotArea: PropertyArea | None,
-        numberOfBedrooms: float,
-        numberOfBathrooms: float,
-        yearBuilt: int | None,
+        property_type: PropertyType,
+        lot_area: PropertyArea | None,
+        number_of_bedrooms: float,
+        number_of_bathrooms: float,
+        year_built: int | None,
     ):
         self.id: str = id
         self.address = address
         self.area = area
-        self.propertyType = propertyType
-        self.lotArea = lotArea
-        self.numberOfBedrooms = numberOfBedrooms
-        self.numberOfBathrooms = numberOfBathrooms
-        self.yearBuilt = yearBuilt
+        self.property_type = property_type
+        self.lot_area = lot_area
+        self.number_of_bedrooms = number_of_bedrooms
+        self.number_of_bathrooms = number_of_bathrooms
+        self.year_built = year_built
     
     def __str__(self):
-        return f"Basic property information: \naddress: {self.address},\nproperty type: {self.propertyType.value}, \narea: {self.area}, \nlot area: {self.lotArea}, \nnumberOfBedrooms: {self.numberOfBedrooms}, \nnumberOfBathrooms: {self.numberOfBathrooms}, \nyearBuilt: {self.yearBuilt}"
+        return f"Basic property information: \naddress: {self.address},\nproperty type: {self.property_type.value}, \narea: {self.area}, \nlot area: {self.lot_area}, \nnumberOfBedrooms: {self.number_of_bedrooms}, \nnumberOfBathrooms: {self.number_of_bathrooms}, \nyearBuilt: {self.year_built}"
 
 class PropertyStatus(Enum):
     Active = "Active"
@@ -189,13 +198,13 @@ class PropertyStatus(Enum):
     Sold = "Sold"
 
 class IPropertyDataSource:
-    def __init__(self, sourceId: str, sourceUrl: str, sourceName: str):
-        self.sourceId: str = sourceId
-        self.sourceUrl: str = sourceUrl
-        self.sourceName: str = sourceName
+    def __init__(self, source_id: str, source_url: str, source_name: str):
+        self.source_id: str = source_id
+        self.source_url: str = source_url
+        self.source_name: str = source_name
     
     def __str__(self):
-        return f"Name: {self.sourceName}, Source ID: {self.sourceId}, URL: {self.sourceUrl}"
+        return f"Name: {self.source_name}, Source ID: {self.source_id}, URL: {self.source_url}"
 
 class IProperty(IPropertyBasic):
     def __init__(
@@ -203,45 +212,45 @@ class IProperty(IPropertyBasic):
         id: str,
         address: IPropertyAddress,
         area: PropertyArea,
-        propertyType: PropertyType,
-        lotArea: PropertyArea | None,
-        numberOfBedrooms: float,
-        numberOfBathrooms: float,
-        yearBuilt: int | None,
+        property_type: PropertyType,
+        lot_area: PropertyArea | None,
+        number_of_bedrooms: float,
+        number_of_bathrooms: float,
+        year_built: int | None,
         status: PropertyStatus,
         price: float | None,
         history: IPropertyHistory,
-        lastUpdated: datetime,
-        dataSource: List[IPropertyDataSource] = [],
+        last_updated: datetime,
+        data_sources: List[IPropertyDataSource] = [],
     ):
-        super().__init__(id, address, area, propertyType, lotArea, numberOfBedrooms, numberOfBathrooms, yearBuilt)
+        super().__init__(id, address, area, property_type, lot_area, number_of_bedrooms, number_of_bathrooms, year_built)
         self.status = status
         self.price = price
         self.history = history
-        self._lastUpdated = lastUpdated if lastUpdated is not None else datetime.now(timezone.utc)
-        self.dataSource = dataSource
+        self._last_updated = last_updated if last_updated is not None else datetime.now(timezone.utc)
+        self.data_sources = data_sources
 
     @property
-    def lastUpdated(self) -> datetime:
-        return self._lastUpdated
+    def last_updated(self) -> datetime:
+        return self._last_updated
 
     def __str__(self):
         return (
             super().__str__() +
-            f",\nstate: {self.status.value},\nprice: {self.price if self.price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self.dataSource)},\nlastUpdated: {self.lastUpdated.strftime('%Y-%m-%d %H:%M:%S')}\nhistory:\n{self.history}\n"
+            f",\nstate: {self.status.value},\nprice: {self.price if self.price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self.data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}\nhistory:\n{self.history}\n"
         )
 
 if __name__ == "__main__":
     # Test the IPropertyAddress class
     address = "1838 Market St,Kirkland, WA 98033"
-    addressObj = IPropertyAddress(address)
+    address_obj = IPropertyAddress(address)
     area = PropertyArea(2879)
-    print(addressObj)
+    print(address_obj)
 
     # Test the IPropertyBasic class
-    propertyId = uuid.uuid4()
+    property_id = uuid.uuid4()
     property1 = IPropertyBasic(
-        str(propertyId),
+        str(property_id),
         IPropertyAddress(address),
         PropertyArea(1700, AreaUnit.SquareFeet),
         PropertyType.SingleFamily,
