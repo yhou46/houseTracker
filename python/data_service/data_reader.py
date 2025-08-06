@@ -310,7 +310,9 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             source_id = str(source_id)
 
         # Create event
+        event_id = str(uuid.uuid4())
         history_event: IPropertyHistoryEvent = IPropertyHistoryEvent(
+            id=event_id,
             datetime=date_obj,
             event_type=event_type,
             description=description,
@@ -524,7 +526,7 @@ if __name__ == "__main__":
 
     # Go up two levels to the project root, then into redfin_output
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250730_193138.jsonl")
+    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250805_184040.jsonl")
     print(redfin_output_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
