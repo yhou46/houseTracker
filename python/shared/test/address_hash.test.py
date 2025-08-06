@@ -39,6 +39,15 @@ class TestGetAddressHash(unittest.TestCase):
         for input_addr, expected_hash in test_addresses:
             print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")
             self.assertEqual(get_address_hash(input_addr), expected_hash)
+    
+    def test_vacant_land_address(self) -> None:
+        test_addresses: List[Tuple[str, str]] = [
+            ("1203 X Dave Road, Redmond, WA 98052", "1203-x-dave-rd|redmond|wa|98052"),
+            ("1203 X Dave Rd,Redmond, WA 98052", "1203-x-dave-rd|redmond|wa|98052"),
+        ]
+        for input_addr, expected_hash in test_addresses:
+            print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")
+            self.assertEqual(get_address_hash(input_addr), expected_hash)
 
 if __name__ == "__main__":
     unittest.main() 

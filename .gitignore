@@ -177,4 +177,5 @@ python/tmp
 python/crawler/**/debug
 python/crawler/**/redfin_output
 python/crawler/**/redfin_logs
+python/**/error_logs
 python/crawler/**/logs
