@@ -2,7 +2,7 @@ from enum import Enum
 from typing import List, Dict
 import logging
 
-import usaddress # type: ignore
+import usaddress
 
 # USPS standard abbreviations for street suffixes and directionals
 suffix_abbr = {
@@ -64,7 +64,7 @@ unit_abbr = {
     "ste": "STE",
 }
 
-def _abbreviate_word(word: str, abbr_map: dict) -> str:
+def _abbreviate_word(word: str, abbr_map: Dict[str, str]) -> str:
     return abbr_map.get(word.lower(), word)
 
 def get_street_address(address: str, logger: logging.Logger | None = None) -> str:
@@ -78,7 +78,7 @@ class InvalidAddressError(Exception):
         super().__init__(message)
         self.address = address
 
-    def __str__(self):
+    def __str__(self) -> str:
         return super().__str__() + f"Address: {self.address})"
 
 def get_address_components(address: str, logger: logging.Logger | None = None) -> Dict[str, str]:
@@ -218,12 +218,12 @@ class IPropertyAddress:
         return self._address_hash
 
     # This is index related
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyAddress):
             return NotImplemented
         return self._address_hash == other._address_hash
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"AddressHash: {self._address_hash}, Street: {self.street_name}, UnitNumber(if any): {self._unit}, State: {self._state}, ZipCode: {self._zip_code}"
 
 if __name__ == "__main__":
