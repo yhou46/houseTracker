@@ -12,12 +12,14 @@ usaddress = "*"
 uuid = "*"
 scrapy = "*"
 boto3 = "*"
+boto3-stubs = {extras = ["essential"], version = "*"}
 
 [dev-packages]
 mypy = "*"
 types-beautifulsoup4 = "*"
 types-requests = "*"
 pandas-stubs = "*"
+boto3-stubs = "*"
 
 [requires]
 python_version = "3.12"
