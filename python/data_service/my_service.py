@@ -20,13 +20,65 @@ class DynamoDbPropertyTableEntityType(Enum):
     Property = "PROPERTY"
     PropertyHistory = "HISTORY"
 
-class DynamoDbPropertyTableAttribute(Enum):
+class DynamoDbPropertyTableAttributeName(Enum):
     # Required attributes for keys and indexes
     PK = "PK"  # Partition Key
     SK = "SK"  # Sort Key
     Status = "Status"
     AddressPropertyTypeIndex = "AddressPropertyTypeIndex"
     AddressHash = "AddressHash"
+
+    # Other attributes
+    Id = "Id"
+
+    # Address related attributes
+    Address = "Address"
+    Address_StreetName = "StreetName"
+    Address_Unit = "Unit"
+    Address_City = "City"
+    Address_State = "State"
+    Address_ZipCode = "ZipCode"
+
+    # Property area related attributes
+    Area = "Area"
+    Area_Value = "Value"
+    Area_Unit = "Unit"
+
+    # Property lot area related attributes
+    LotArea = "LotArea"
+    LotArea_Value = "Value"
+    LotArea_Unit = "Unit"
+
+    # Property type
+    PropertyType = "PropertyType"
+
+    # Number of bedrooms and bathrooms
+    NumberOfBedrooms = "NumberOfBedrooms"
+    NumberOfBathrooms = "NumberOfBathrooms"
+
+    # Year built
+    YearBuilt = "YearBuilt"
+
+    # Price
+    Price = "Price"
+
+    # Last updated
+    LastUpdated = "LastUpdated"
+
+    # Data sources
+    DataSources = "DataSources"
+    DataSource_SourceId = "SourceId"
+    DataSource_SourceUrl = "SourceUrl"
+    DataSource_SourceName = "SourceName"
+
+    # Property history event related attributes
+    HistoryEventType = "EventType"
+    HistoryEventDescription = "Description"
+    HistoryEventPrice = "Price"
+    HistoryEventSource = "Source"
+    HistoryEventSourceId = "SourceId"
+    HistoryEventDatetime = "Datetime"
+
 
 def get_pk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType) -> str:
     return f"{entity_type.value}#{entity_id}"
@@ -94,12 +146,12 @@ def convert_property_to_dynamodb_items(property: IProperty) -> List[Dict[str, An
         "ZipCode": property.address.zip_code
     }
     property_item["Area"] = {
-        "Area": Decimal(property.area.area),
+        "Value": Decimal(property.area.value),
         "Unit": property.area.unit.value
     } if property.area else None
     property_item["PropertyType"] = property.property_type.value
     property_item["LotArea"] = {
-        "Area": Decimal(property.lot_area.area),
+        "Value": Decimal(property.lot_area.value),
         "Unit": property.lot_area.unit.value
     } if property.lot_area else None
     property_item["NumberOfBedrooms"] = Decimal(property.number_of_bedrooms) if property.number_of_bedrooms is not None else None

@@ -13,17 +13,17 @@ class AreaUnit(Enum):
     Acres = "Acres"
 
 class PropertyArea:
-    def __init__(self, area: float, unit: AreaUnit = AreaUnit.SquareFeet):
-        self.area: float = area
+    def __init__(self, value: float, unit: AreaUnit = AreaUnit.SquareFeet):
+        self.value: float = value
         self.unit: AreaUnit = unit
 
     def __eq__(self, value):
         if not isinstance(value, PropertyArea):
             return NotImplemented
-        return self.area == value.area and self.unit == value.unit
+        return self.value == value.value and self.unit == value.unit
 
     def __str__(self):
-        return f"{self.area} {self.unit.value}"
+        return f"{self.value} {self.unit.value}"
 
 class PropertyType(Enum):
     SingleFamily = "SingleFamily"
@@ -92,7 +92,6 @@ class IPropertyHistoryEvent:
         self._price = price
         self._source = source
         self._source_id = source_id
-        self._id = str(uuid.uuid4())  # Unique ID for the event
 
     @property
     def id(self) -> str:
@@ -148,7 +147,7 @@ class IPropertyHistory:
         self._last_updated = datetime.now(timezone.utc)
 
     @property
-    def id(self) -> str:
+    def property_id(self) -> str:
         return self._property_id
 
     @property
