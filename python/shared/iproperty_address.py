@@ -2,7 +2,7 @@ from enum import Enum
 from typing import List, Dict
 import logging
 
-import usaddress
+import usaddress # type: ignore[import-untyped]
 
 # USPS standard abbreviations for street suffixes and directionals
 suffix_abbr = {

@@ -1,5 +1,5 @@
 import unittest
-import usaddress
+import usaddress # type: ignore[import-untyped]
 from datetime import datetime
 
 from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, PropertyHistoryEventType
