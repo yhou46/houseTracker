@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 
 from crawler.redfin_spider.items import RedfinPropertyItem
-from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent
+from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
 
 from shared.iproperty_address import IPropertyAddress
 from shared.iproperty_address import InvalidAddressError
@@ -500,7 +500,7 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
     history = parse_property_history(data, property_id, address)
 
     # Create property object
-    property = IProperty(
+    property_meta = IPropertyMetadata(
         id = property_id,
         address = address,
         area = area,
@@ -511,11 +511,14 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         year_built = year_built,
         status = status,
         price = price,
-        history = history,
+        last_updated= last_updated,
         data_sources = data_source,
-        last_updated = last_updated
     )
-    return property
+    result_property = IProperty(
+        property_metadata= property_meta,
+        property_history=history,
+    )
+    return result_property
 
 if __name__ == "__main__":
     # Get the directory of the current script (data_reader.py)
