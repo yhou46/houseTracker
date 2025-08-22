@@ -178,7 +178,7 @@ class IPropertyBasic:
         self.year_built = year_built
     
     def __str__(self) -> str:
-        return f"Basic property information: \naddress: {self.address},\nproperty type: {self.property_type.value}, \narea: {self.area}, \nlot area: {self.lot_area}, \nnumberOfBedrooms: {self.number_of_bedrooms}, \nnumberOfBathrooms: {self.number_of_bathrooms}, \nyearBuilt: {self.year_built}"
+        return f"Basic property information: \nproperty_id: {self.id}\naddress: {self.address},\nproperty type: {self.property_type.value}, \narea: {self.area}, \nlot area: {self.lot_area}, \nnumberOfBedrooms: {self.number_of_bedrooms}, \nnumberOfBathrooms: {self.number_of_bathrooms}, \nyearBuilt: {self.year_built}"
 
 class IPropertyMetadata(IPropertyBasic):
     def __init__(
@@ -221,7 +221,7 @@ class IPropertyMetadata(IPropertyBasic):
     def __str__(self) -> str:
         return (
             super().__str__() +
-            f",\nstate: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f",\status: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
 class IProperty():
@@ -287,8 +287,8 @@ class IProperty():
 
     def __str__(self) -> str:
         return (
-            super().__str__() +
-            f",\nstate: {self.status.value},\nprice: {self.price if self.price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self.data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}\nhistory:\n{self._history}\n"
+            self._metadata.__str__() +
+            f"\nHistory:\n{self._history.__str__()}"
         )
 
 if __name__ == "__main__":

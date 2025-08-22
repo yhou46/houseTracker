@@ -12,7 +12,7 @@ from mypy_boto3_dynamodb.client import DynamoDBClient
 from botocore.exceptions import ClientError
 
 
-from shared.iproperty import IProperty, PropertyType, IPropertyHistory, IPropertyHistoryEvent, IPropertyAddress
+from shared.iproperty import IProperty, PropertyType, IPropertyHistory, IPropertyHistoryEvent, IPropertyAddress, PropertyArea, AreaUnit, PropertyStatus, IPropertyDataSource, IPropertyMetadata, PropertyHistoryEventType
 
 from data_service.redfin_data_reader import RedfinFileDataReader, PropertyDataStreamParsingError, IPropertyDataStream
 
@@ -79,6 +79,9 @@ class DynamoDbPropertyTableAttributeName(Enum):
     HistoryEventSourceId = "SourceId"
     HistoryEventDatetime = "Datetime"
 
+class DynamoDbPropertyTableGlobalSecondaryIndexName(Enum):
+    StatusAddressPropertyTypeIndex = "StatusAddressPropertyTypeIndex"
+    AddressHashIndex = "AddressHashIndex"
 
 def get_pk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType) -> str:
     return f"{entity_type.value}#{entity_id}"
@@ -88,6 +91,37 @@ def get_sk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityT
 
 def get_address_property_type_index(state: str, zip_code: str, city: str, property_type: PropertyType) -> str:
     return f"{state}#{city}#{zip_code}#{property_type.value}"
+
+def get_property_id_from_pk(pk: str) -> str:
+    """
+    Extracts the property ID from the partition key (PK) format.
+
+    Args:
+        pk (str): The partition key in the format "PROPERTY#<property_id>".
+
+    Returns:
+        str: The extracted property ID.
+    """
+    parts = pk.split("#")
+    if len(parts) != 2 or parts[0] != DynamoDbPropertyTableEntityType.Property.value:
+        raise ValueError(f"Invalid PK format: {pk}")
+    return parts[1]
+
+def get_history_event_id_from_sk(sk: str) -> str | None:
+    """
+    Extracts the history event ID from the sort key (SK) format.
+
+    Args:
+        sk (str): The sort key in the format "HISTORY#<event_id>#<datetime>".
+
+    Returns:
+        str: The extracted history event ID.
+    """
+    parts = sk.split("#")
+    if len(parts) < 3 or parts[0] != DynamoDbPropertyTableEntityType.PropertyHistory.value:
+        print(f"Invalid SK format: {sk} or it is not a history event")
+        return None
+    return parts[1]
 
 def convert_property_history_event_to_dynamodb_item(
         property_id: str,
@@ -172,12 +206,160 @@ def convert_property_to_dynamodb_items(property: IProperty) -> List[Dict[str, An
     ]
 
     # Convert history
-    history_items = convert_property_history_to_dynamodb_item(property.history)
-    
+    history_items = convert_property_history_to_dynamodb_item(property._history)
+
     # Combine property item with history items
     property_items = [property_item] + history_items
 
     return property_items
+
+# TODO: Implement this function to convert DynamoDB items back to IProperty object
+def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
+    """
+    Convert DynamoDB items back to IProperty object.
+
+    Args:
+        items: List of DynamoDB items representing a property and its history
+
+    Returns:
+        IProperty: The reconstructed property object
+    """
+    if not items:
+        raise ValueError("No items provided to convert")
+
+    # Separate property item from history items
+    property_item = None
+    history_items = []
+
+    for item in items:
+        pk = item.get(DynamoDbPropertyTableAttributeName.PK.value, "")
+        sk = item.get(DynamoDbPropertyTableAttributeName.SK.value, "")
+
+        # Check if this is a property item or history item
+        if sk.startswith(f"{DynamoDbPropertyTableEntityType.Property.value}#"):
+            property_item = item
+        elif sk.startswith(f"{DynamoDbPropertyTableEntityType.PropertyHistory.value}#"):
+            history_items.append(item)
+
+    if not property_item:
+        raise ValueError("No property item found in the provided items")
+
+    # Extract property ID from PK
+    property_id = property_item[DynamoDbPropertyTableAttributeName.Id.value]
+
+    # Extract address information
+    address_data = property_item[DynamoDbPropertyTableAttributeName.Address.value]
+    address_str = f"{address_data[DynamoDbPropertyTableAttributeName.Address_StreetName.value]}"
+    if address_data.get(DynamoDbPropertyTableAttributeName.Address_Unit.value):
+        address_str += f" {address_data[DynamoDbPropertyTableAttributeName.Address_Unit.value]}"
+    address_str += f", {address_data[DynamoDbPropertyTableAttributeName.Address_City.value]}, {address_data[DynamoDbPropertyTableAttributeName.Address_State.value]} {address_data[DynamoDbPropertyTableAttributeName.Address_ZipCode.value]}"
+
+    address = IPropertyAddress(address_str)
+
+    # Extract area information
+    area_data = property_item.get(DynamoDbPropertyTableAttributeName.Area.value)
+    if not area_data:
+        raise ValueError("Area information is required but not found in DynamoDB item")
+    area_value = float(area_data[DynamoDbPropertyTableAttributeName.Area_Value.value])
+    area_unit = AreaUnit(area_data[DynamoDbPropertyTableAttributeName.Area_Unit.value])
+    area = PropertyArea(area_value, area_unit)
+
+    # Extract property type
+    property_type = PropertyType(property_item[DynamoDbPropertyTableAttributeName.PropertyType.value])
+
+    # Extract lot area information
+    lot_area_data = property_item.get(DynamoDbPropertyTableAttributeName.LotArea.value)
+    lot_area = None
+    if lot_area_data:
+        lot_area_value = float(lot_area_data[DynamoDbPropertyTableAttributeName.LotArea_Value.value])
+        lot_area_unit = AreaUnit(lot_area_data[DynamoDbPropertyTableAttributeName.LotArea_Unit.value])
+        lot_area = PropertyArea(lot_area_value, lot_area_unit)
+
+    # Extract bedrooms and bathrooms
+    number_of_bedrooms = float(property_item[DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value]) if property_item.get(DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value) is not None else 0.0
+    number_of_bathrooms = float(property_item[DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value]) if property_item.get(DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value) is not None else 0.0
+
+    # Extract year built
+    year_built = property_item.get(DynamoDbPropertyTableAttributeName.YearBuilt.value)
+
+    # Extract status
+    status = PropertyStatus(property_item[DynamoDbPropertyTableAttributeName.Status.value])
+
+    # Extract price
+    price = float(property_item[DynamoDbPropertyTableAttributeName.Price.value]) if property_item.get(DynamoDbPropertyTableAttributeName.Price.value) is not None else None
+
+    # Extract last updated
+    last_updated = datetime.fromisoformat(property_item[DynamoDbPropertyTableAttributeName.LastUpdated.value])
+
+    # Extract data sources
+    data_sources_data = property_item.get(DynamoDbPropertyTableAttributeName.DataSources.value, [])
+    data_sources = []
+    for ds_data in data_sources_data:
+        data_source = IPropertyDataSource(
+            source_id=ds_data[DynamoDbPropertyTableAttributeName.DataSource_SourceId.value],
+            source_url=ds_data[DynamoDbPropertyTableAttributeName.DataSource_SourceUrl.value],
+            source_name=ds_data[DynamoDbPropertyTableAttributeName.DataSource_SourceName.value]
+        )
+        data_sources.append(data_source)
+
+    # Create property metadata
+    property_metadata = IPropertyMetadata(
+        id=property_id,
+        address=address,
+        area=area,
+        property_type=property_type,
+        lot_area=lot_area,
+        number_of_bedrooms=number_of_bedrooms,
+        number_of_bathrooms=number_of_bathrooms,
+        year_built=year_built,
+        status=status,
+        price=price,
+        last_updated=last_updated,
+        data_sources=data_sources
+    )
+
+    # Extract history events
+    history_events = []
+    for history_item in history_items:
+        # Extract event ID from SK
+        sk_parts = history_item[DynamoDbPropertyTableAttributeName.SK.value].split("#")
+        event_id = sk_parts[1] if len(sk_parts) > 1 else ""
+
+        # Extract event datetime from SK
+        event_datetime_str = sk_parts[2] if len(sk_parts) > 2 else ""
+        event_datetime = datetime.fromisoformat(event_datetime_str)
+
+        # Extract other event properties
+        event_type = PropertyHistoryEventType(history_item[DynamoDbPropertyTableAttributeName.HistoryEventType.value])
+        description = history_item[DynamoDbPropertyTableAttributeName.HistoryEventDescription.value]
+        event_price = float(history_item[DynamoDbPropertyTableAttributeName.HistoryEventPrice.value]) if history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventPrice.value) is not None else None
+        source = history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventSource.value)
+        source_id = history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventSourceId.value)
+
+        history_event = IPropertyHistoryEvent(
+            id=event_id,
+            datetime=event_datetime,
+            event_type=event_type,
+            description=description,
+            source=source,
+            source_id=source_id,
+            price=event_price
+        )
+        history_events.append(history_event)
+
+    # Create property history
+    property_history = IPropertyHistory(
+        property_id=property_id,
+        address=address,
+        history=history_events,
+        last_updated=last_updated
+    )
+
+    # Create and return the IProperty object
+    return IProperty(
+        property_metadata=property_metadata,
+        property_history=property_history
+    )
 
 def check_dynamodb_table_exists(table_name: str, dynamodb_client: DynamoDBClient) -> bool:
     """
@@ -212,39 +394,54 @@ def create_dynambodb_table_for_property(
 
     # Define key schema
     key_schema: List[KeySchemaElementTypeDef] = [
-        {"AttributeName": "PK", "KeyType": "HASH"},
-        {"AttributeName": "SK", "KeyType": "RANGE"},
+        {"AttributeName": DynamoDbPropertyTableAttributeName.PK.value, "KeyType": "HASH"},
+        {"AttributeName": DynamoDbPropertyTableAttributeName.SK.value, "KeyType": "RANGE"},
     ]
 
     # TODO: need to use a class to define the table schema, indexes, and attributes
     # Define Global Secondary Indexes
     global_secondary_indexes: List[GlobalSecondaryIndexTypeDef | GlobalSecondaryIndexOutputTypeDef] = [
         {
-            "IndexName": "StatusAddressPropertyTypeIndex",
+            "IndexName": DynamoDbPropertyTableGlobalSecondaryIndexName.StatusAddressPropertyTypeIndex.value,
             "KeySchema": [
-                {"AttributeName": "Status", "KeyType": "HASH"},
-                {"AttributeName": "AddressPropertyTypeIndex", "KeyType": "RANGE"}
+                {"AttributeName": DynamoDbPropertyTableAttributeName.Status.value, "KeyType": "HASH"},
+                {"AttributeName": DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value, "KeyType": "RANGE"}
             ],
             "Projection": {"ProjectionType": "KEYS_ONLY"},
         },
         {
-            "IndexName": "AddressHashIndex",
+            "IndexName": DynamoDbPropertyTableGlobalSecondaryIndexName.AddressHashIndex.value,
             "KeySchema": [
-                {"AttributeName": "AddressHash", "KeyType": "HASH"},
+                {"AttributeName": DynamoDbPropertyTableAttributeName.AddressHash.value, "KeyType": "HASH"},
             ],
             "Projection": {"ProjectionType": "KEYS_ONLY"},
         }
     ]
 
     attribute_definitions: List[AttributeDefinitionTypeDef] = [
-        {"AttributeName": "PK", "AttributeType": "S"}, # EntityType#EntityId
-        {"AttributeName": "SK", "AttributeType": "S"}, # EntityType#EntityId#TimeInUtc
-        {"AttributeName": "Status", "AttributeType": "S"},
-        {"AttributeName": "AddressPropertyTypeIndex", "AttributeType": "S"}, # State#City#Zip#PropertyType
-        {"AttributeName": "AddressHash", "AttributeType": "S"},
+        {
+            "AttributeName": DynamoDbPropertyTableAttributeName.PK.value,
+            "AttributeType": "S",
+        }, # EntityType#EntityId
+        {
+            "AttributeName": DynamoDbPropertyTableAttributeName.SK.value,
+            "AttributeType": "S",
+        }, # EntityType#EntityId#TimeInUtc
+        {
+            "AttributeName": DynamoDbPropertyTableAttributeName.Status.value,
+            "AttributeType": "S",
+        },
+        {
+            "AttributeName": DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value,
+            "AttributeType": "S",
+        }, # State#City#Zip#PropertyType
+        {
+            "AttributeName": DynamoDbPropertyTableAttributeName.AddressHash.value,
+            "AttributeType": "S",
+        },
     ]
 
-    # Create table    
+    # Create table
     table = dynamodb_resource.create_table(
         TableName=table_name,
         AttributeDefinitions=attribute_definitions,
@@ -254,14 +451,14 @@ def create_dynambodb_table_for_property(
         DeletionProtectionEnabled=True,
         )
     table.wait_until_exists()
-    
+
     print(f"Table {table_name} created successfully")
 
 class DynamoDBServiceForProperty:
     def __init__(self, table_name: str, region_name: str = "us-west-2"):
         """
         Initialize DynamoDB service
-        
+
         Args:
             table_name: DynamoDB table name (defaults to schema default)
             region_name: AWS region name
@@ -275,7 +472,7 @@ class DynamoDBServiceForProperty:
         self.table = self.dynamodb_resource.Table(self.table_name)
         self.logger = logging.getLogger(__name__)
 
-    def get_property_by_id(self, property_id: str) -> List[Dict[str, Any]]:
+    def get_property_by_id(self, property_id: str) -> IProperty | None:
         """
         Retrieve a property by its ID from the DynamoDB table.
 
@@ -290,14 +487,15 @@ class DynamoDBServiceForProperty:
             response = self.table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('PK').eq(partition_key))
             items = response['Items']
 
-            # TODO: need to convert items to IProperty object
-            for item in items:
-                print(item)
-            return items if items else []
+            if not items:
+                return None
+
+            # Convert DynamoDB items to IProperty object
+            return convert_dynamodb_item_to_property(items)
         except ClientError as error:
             self.logger.error(f"Error retrieving property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
-    
+
     def _query_items_by_property_id(self, property_id: str) -> List[Dict[str, Any]]:
         """
         Retrieve a property by its ID from the DynamoDB table.
@@ -319,16 +517,45 @@ class DynamoDBServiceForProperty:
         except ClientError as error:
             self.logger.error(f"Error retrieving property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
-    
-    def get_property_by_address(self, address: IPropertyAddress):
-        response = self.table.query(
-            IndexName="AddressHashIndex",
-            KeyConditionExpression=boto3.dynamodb.conditions.Key("AddressHash").eq(address.get_address_hash()),
-        )
-        # TODO: need to query the full property use the id
-        items = response['Items']
-        for item in items:
-            print(item)
+
+    def get_property_by_address(self, address: IPropertyAddress) -> IProperty | None:
+        """
+        Retrieve a property by its address from the DynamoDB table.
+
+        Args:
+            address (IPropertyAddress): The address of the property to retrieve.
+
+        Returns:
+            Optional[IProperty]: The property object if found, otherwise None.
+        """
+        try:
+            response = self.table.query(
+                IndexName="AddressHashIndex",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("AddressHash").eq(address.get_address_hash()),
+            )
+            items = response['Items']
+
+            self.logger.info(f"Get items from DB by address {address.get_address_hash()}: {items}")
+
+            if not items:
+                self.logger.warning(f"No property found with address {address.get_address_hash()}")
+                return None
+
+            # Get the property ID from the first item (all items should have the same property ID)
+            PK = items[0].get(DynamoDbPropertyTableAttributeName.PK.value)
+            if not PK:
+                self.logger.error(f"No property ID found in items for address {address.get_address_hash()}")
+                raise ValueError(f"No property ID found in items for address {address.get_address_hash()}")
+            property_id = get_property_id_from_pk(str(PK))
+            if not property_id:
+                self.logger.warning(f"Failed to extract property ID from PK {str(PK)} for address {address.get_address_hash()}")
+                return None
+
+            # Query the full property using the ID
+            return self.get_property_by_id(property_id)
+        except ClientError as error:
+            self.logger.error(f"Error retrieving property with address {address}: {error.response['Error']['Message']}")
+            raise error
 
     # TODO: need to check if the property already exists and merge the history if possible; do NOT overwrite the existing property
     def save_property(self, property: IProperty):
@@ -401,7 +628,7 @@ def run_save_test(table_name: str, region: str):
             print("Start to save property to DynamoDB")
             dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
             dynamoDbService.save_property(property)
-            
+
             if count == 1:
                 break
 
@@ -413,29 +640,40 @@ def run_save_test(table_name: str, region: str):
 def run_read_test(table_name: str, region: str, property_id: str):
     """
     Run a read test to retrieve a property by its ID from DynamoDB.
-    
+
     Args:
         table_name (str): The name of the DynamoDB table.
         region (str): The AWS region where the DynamoDB table is located.
         property_id (str): The ID of the property to retrieve.
     """
     dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    dynamoDbService.get_property_by_id(property_id)
+    property_obj = dynamoDbService.get_property_by_id(property_id)
+    if property_obj:
+        print(f"Retrieved property: {property_obj}")
+    else:
+        print(f"Property with ID {property_id} not found")
 
 if __name__ == "__main__":
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
     # Dynamodb set up
     table_name = "properties"
     region = "us-west-2"
 
     # Write test
-    run_save_test(table_name, region)
+    # run_save_test(table_name, region)
 
     # Read test
-    # property_id = "f167cf57-db57-406b-9fa8-9ca566741b20"
-    # address_str = "655 Crockett St Unit B304, Seattle, WA 98109"
-    # address_obj = IPropertyAddress(address_str)
-    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    # dynamoDbService.get_property_by_address(address_obj)
+    property_id = "f167cf57-db57-406b-9fa8-9ca566741b20"
+    address_str = "655 Crockett St Unit B304, Seattle, WA 98109"
+    address_obj = IPropertyAddress(address_str)
+    dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    property_obj = dynamoDbService.get_property_by_address(address_obj)
+    if property_obj:
+        print(f"Retrieved property by address: {property_obj}")
+    else:
+        print(f"Property with address {address_str} not found")
 
     # Delete test
     # property_id = "f167cf57-db57-406b-9fa8-9ca566741b20"
