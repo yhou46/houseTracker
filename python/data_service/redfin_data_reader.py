@@ -1,4 +1,4 @@
-from typing import Iterator, Callable, Any, Dict
+from typing import Iterator, Callable, Any, Dict, Tuple
 from enum import Enum
 import json
 import uuid
@@ -77,16 +77,17 @@ PropertyDataStreamErrorHandlerType = Callable[[PropertyDataStreamParsingError], 
 def empty_data_stream_error_handler(error: PropertyDataStreamParsingError) -> None:
    raise error
 
-class IPropertyDataStream(Iterator[IProperty]):
+type IPropertyDataStreamIteratorType = tuple[IPropertyMetadata, IPropertyHistory]
+class IPropertyDataStream(Iterator[IPropertyDataStreamIteratorType]):
 
     def __init__(self, error_handler: PropertyDataStreamErrorHandlerType):
         self._error_handler = error_handler
 
-    def __iter__(self) -> Iterator[IProperty]:
+    def __iter__(self) -> Iterator[IPropertyDataStreamIteratorType]:
         self.initialize()
         return self
 
-    def __next__(self) -> IProperty:
+    def __next__(self) -> IPropertyDataStreamIteratorType:
         entry = self.next_entry()
         if entry is None:
             self.close()
@@ -97,7 +98,7 @@ class IPropertyDataStream(Iterator[IProperty]):
     Should return None when there are no more entries.
     Raise exceptions for errors, which will be handled by the error handler.
     '''
-    def next_entry(self) -> IProperty | None:
+    def next_entry(self) -> IPropertyDataStreamIteratorType | None:
         raise NotImplementedError("This method should be overridden by subclasses")
 
     def initialize(self) -> None:
@@ -116,7 +117,7 @@ class RedfinFileDataReader(IPropertyDataStream):
         self._fileObject = open(self._file_path, 'r')
         # Initialize any other resources
 
-    def next_entry(self) -> IProperty | None:
+    def next_entry(self) -> IPropertyDataStreamIteratorType | None:
         try:
             line = self._fileObject.readline().strip()
             if not line:
@@ -253,7 +254,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
     if not isinstance(data, dict):
         raise ValueError("Data must be a dictionary")
     history_list = data.get('history', [])
-    property_history: IPropertyHistory = IPropertyHistory(property_id, address, [])
+    property_history: IPropertyHistory = IPropertyHistory(address, [])
     for event in history_list:
         if not isinstance(event, dict):
             raise ValueError("Each history event must be a dictionary")
@@ -297,7 +298,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             raise ValueError(f"Unknown event description: {description}")
 
         if event_type == PropertyHistoryEventType.PriceChange and price is None:
-            print(f"Warning: PriceChange event without price on {date_str} for property {property_id}, address {address.get_address_hash()}")
+            print(f"Warning: PriceChange event without price on {date_str} for property {property_id}, address {address.address_hash}")
 
         # Parse source and sourceId
         source = event.get('source')
@@ -328,7 +329,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
 
     return property_history
 
-def parse_json_str_to_property(line: str) -> IProperty | None:
+def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyHistory]:
     data = json.loads(line)
     redfin_data = RedfinPropertyEntry(
         url=data.get('url'),
@@ -499,9 +500,14 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
     # Parse property history
     history = parse_property_history(data, property_id, address)
 
+    # Legacy data doesn't have price
+    if price is None and len(history.history) > 0:
+        # Set price to the last history event's price
+        price = history.history[-1].price
+
+
     # Create property object
     property_meta = IPropertyMetadata(
-        id = property_id,
         address = address,
         area = area,
         property_type = property_type,
@@ -514,11 +520,7 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         last_updated= last_updated,
         data_sources = data_source,
     )
-    result_property = IProperty(
-        property_metadata= property_meta,
-        property_history=history,
-    )
-    return result_property
+    return property_meta, history
 
 if __name__ == "__main__":
     # Get the directory of the current script (data_reader.py)
@@ -526,7 +528,7 @@ if __name__ == "__main__":
 
     # Go up two levels to the project root, then into redfin_output
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250805_184040.jsonl")
+    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250821_201954.jsonl")
     print(redfin_output_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -543,9 +545,10 @@ if __name__ == "__main__":
         reader: IPropertyDataStream = RedfinFileDataReader(redfin_output_path, file_error_handler)
         count = 0
 
-        for property in reader:
+        for metadata, history in reader:
             count += 1
-            print(property)
+            print(metadata)
+            print(history)
             if count % 100 == 0:
                 print(f"Processed {count} properties...")
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")

@@ -1,6 +1,7 @@
 from enum import Enum
 from datetime import datetime, timezone
 from typing import List
+import math
 
 import uuid
 import logging
@@ -19,7 +20,7 @@ class PropertyArea:
 
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, PropertyArea):
-            return NotImplemented
+            return False
         return self.value == value.value and self.unit == value.unit
 
     def __str__(self) -> str:
@@ -93,10 +94,15 @@ class IPropertyHistoryEvent:
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyHistoryEvent):
-            return NotImplemented
+            return False
+        priceMatch = False
+        if self.price is None or other.price is None:
+            priceMatch = (self.price == other.price)
+        else:
+            priceMatch = math.isclose(self.price, other.price)
         return (self._datetime == other._datetime and
                 self._event_type == other._event_type and
-                self._price == other._price and
+                priceMatch and
                 self._source == other._source and
                 self._source_id == other._source_id)
 
@@ -104,24 +110,17 @@ class IPropertyHistoryEvent:
 class IPropertyHistory:
     def __init__(
             self,
-            property_id: str,
             address: IPropertyAddress,
-            history: List[IPropertyHistoryEvent] | None = None,
+            history: List[IPropertyHistoryEvent],
             last_updated: datetime | None = None
             ):
         self._history = history if history is not None else []
-        self._property_id = property_id
         self._address = address
         self._last_updated = last_updated if last_updated is not None else datetime.now(timezone.utc)
 
     def addEvent(self, event: IPropertyHistoryEvent) -> None:
         self._history.append(event)
         self._history.sort(key = lambda event: event._datetime) # Sort by date
-        self._last_updated = datetime.now(timezone.utc)
-
-    @property
-    def property_id(self) -> str:
-        return self._property_id
 
     @property
     def address(self) -> IPropertyAddress:
@@ -135,9 +134,49 @@ class IPropertyHistory:
     def last_updated(self) -> datetime:
         return self._last_updated
 
+    @staticmethod
+    def merge_history(history1: "IPropertyHistory", history2: "IPropertyHistory") -> "IPropertyHistory":
+        """
+        Merge two IPropertyHistory objects, combining their events and removing duplicates.
+        """
+        if history1.address != history2.address:
+            raise ValueError("Cannot merge histories with different addresses")
+
+        combined_events = history1.history + history2.history
+        unique_events = []
+        for event in combined_events:
+            if event not in unique_events:
+                unique_events.append(event)
+        # Optionally, sort by event datetime
+        unique_events.sort(key=lambda event: event.datetime)
+        # Use the latest last_updated
+        last_updated = max(history1.last_updated, history2.last_updated)
+        return IPropertyHistory(
+            address=history1.address,
+            history=unique_events,
+            last_updated=last_updated,
+        )
+
     def __str__(self) -> str:
         history_str = "\n".join(str(event) for event in self._history)
-        return f"Property ID: {self._property_id},\nAddress: {self._address.get_address_hash()},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"Address: {self._address.address_hash},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    def __eq__(self, value) -> bool:
+        if not isinstance(value, IPropertyHistory):
+            return False
+
+        # Check other properties
+        if self.address != value.address or self.last_updated != value.last_updated:
+            return False
+
+        # Check each entry in history
+        if len(self.history) != len(value.history):
+            return False
+        i = 0
+        for i in range(len(self.history)):
+            if self.history[i] != value.history[i]:
+                return False
+        return True
 
 class PropertyStatus(Enum):
     Active = "Active"
@@ -149,9 +188,16 @@ class IPropertyDataSource:
         self.source_id: str = source_id
         self.source_url: str = source_url
         self.source_name: str = source_name
-    
+
     def __str__(self) -> str:
         return f"Name: {self.source_name}, Source ID: {self.source_id}, URL: {self.source_url}"
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, IPropertyDataSource):
+            return False
+        return (self.source_id == other.source_id and
+                self.source_url == other.source_url and
+                self.source_name == other.source_name)
 
 # TODO:
 # How to deal with vacant land? It has many properties as none, like numberOfBedrooms, numberOfBathrooms, yearBuilt, etc.
@@ -159,7 +205,6 @@ class IPropertyDataSource:
 class IPropertyBasic:
     def __init__(
         self,
-        id: str,
         address: IPropertyAddress,
         area: PropertyArea,
         property_type: PropertyType,
@@ -168,7 +213,6 @@ class IPropertyBasic:
         number_of_bathrooms: float,
         year_built: int | None,
     ):
-        self.id: str = id
         self.address = address
         self.area = area
         self.property_type = property_type
@@ -176,14 +220,25 @@ class IPropertyBasic:
         self.number_of_bedrooms = number_of_bedrooms
         self.number_of_bathrooms = number_of_bathrooms
         self.year_built = year_built
-    
-    def __str__(self) -> str:
-        return f"Basic property information: \nproperty_id: {self.id}\naddress: {self.address},\nproperty type: {self.property_type.value}, \narea: {self.area}, \nlot area: {self.lot_area}, \nnumberOfBedrooms: {self.number_of_bedrooms}, \nnumberOfBathrooms: {self.number_of_bathrooms}, \nyearBuilt: {self.year_built}"
 
+    def __str__(self) -> str:
+        return f"Basic property information: \naddress: {self.address},\nproperty type: {self.property_type.value}, \narea: {self.area}, \nlot area: {self.lot_area}, \nnumberOfBedrooms: {self.number_of_bedrooms}, \nnumberOfBathrooms: {self.number_of_bathrooms}, \nyearBuilt: {self.year_built}"
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, IPropertyBasic):
+            return False
+        return (self.address == other.address and
+                self.area == other.area and
+                self.property_type == other.property_type and
+                self.lot_area == other.lot_area and
+                self.number_of_bedrooms == other.number_of_bedrooms and
+                self.number_of_bathrooms == other.number_of_bathrooms and
+                self.year_built == other.year_built)
+
+# DB layer property metadata
 class IPropertyMetadata(IPropertyBasic):
     def __init__(
         self,
-        id: str,
         address: IPropertyAddress,
         area: PropertyArea,
         property_type: PropertyType,
@@ -196,7 +251,7 @@ class IPropertyMetadata(IPropertyBasic):
         last_updated: datetime,
         data_sources: List[IPropertyDataSource] = [],
     ):
-        super().__init__(id, address, area, property_type, lot_area, number_of_bedrooms, number_of_bathrooms, year_built)
+        super().__init__(address, area, property_type, lot_area, number_of_bedrooms, number_of_bathrooms, year_built)
         self._status = status
         self._price = price
         self._last_updated = last_updated if last_updated is not None else datetime.now(timezone.utc)
@@ -221,22 +276,34 @@ class IPropertyMetadata(IPropertyBasic):
     def __str__(self) -> str:
         return (
             super().__str__() +
-            f",\status: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
+            f",\nstatus: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
         )
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, IPropertyMetadata):
+            return False
+        return (super().__eq__(other) and
+                self._status == other._status and
+                self._price == other._price and
+                self._last_updated == other._last_updated and
+                self._data_sources == other._data_sources)
 
+# DB layer property
 class IProperty():
     def __init__(
         self,
+        id: str,
         property_metadata: IPropertyMetadata,
         property_history: IPropertyHistory,
     ):
+        self._id = id
         self._metadata = property_metadata
         self._history = property_history
 
     @property
     def id(self) -> str:
-        return self._metadata.id
-    
+        return self._id
+
     @property
     def address(self) -> IPropertyAddress:
         return self._metadata.address
@@ -282,14 +349,54 @@ class IProperty():
         return self._metadata._data_sources
 
     @property
+    def metadata(self) -> IPropertyMetadata:
+        return self._metadata
+
+    @property
     def history(self) -> IPropertyHistory:
         return self._history
+
+    def update_metadata(self, new_metadata: IPropertyMetadata):
+        if self._metadata.last_updated < new_metadata.last_updated:
+            self._metadata = new_metadata
+
+    def update_history(self, new_history: IPropertyHistory):
+        self._history = IPropertyHistory.merge_history(self._history, new_history)
 
     def __str__(self) -> str:
         return (
             self._metadata.__str__() +
             f"\nHistory:\n{self._history.__str__()}"
         )
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, IProperty):
+            return False
+        return (self._metadata == other._metadata and
+                self._history == other._history)
+
+    @staticmethod
+    def generate_id() -> str:
+        return str(uuid.uuid4())
+
+# def merge_property(
+#     property1: IProperty,
+#     property2: IProperty,
+# ) -> IProperty:
+#     """
+#     Merge the old property with the new property metadata.
+#     This function will update the metadata and history of the old property with the new property.
+#     """
+#     # Update metadata
+#     new_history = IPropertyHistory.merge_history(
+#         property1.history,
+#         property2.history,
+#     )
+#     new_property_metadata = property2.metadata if property2.last_updated > property1.metadata.last_updated else property1.metadata
+#     return IProperty(
+#         property_metadata=new_property_metadata,
+#         property_history=new_history,
+#     )
 
 if __name__ == "__main__":
     # Test the IPropertyAddress class
@@ -299,9 +406,7 @@ if __name__ == "__main__":
     print(address_obj)
 
     # Test the IPropertyBasic class
-    property_id = uuid.uuid4()
     property1 = IPropertyBasic(
-        str(property_id),
         IPropertyAddress(address),
         PropertyArea(1700, AreaUnit.SquareFeet),
         PropertyType.SingleFamily,
