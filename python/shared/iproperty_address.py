@@ -114,7 +114,7 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
             _abbreviate_word(address_property_bag.get("OccupancyType", ""), unit_abbr),
             address_property_bag.get("OccupancyIdentifier", "")
         ]
-        
+
         # Handle # and Apt/Unit variations, # 116 -> APT 116
         if unit_components[0] == "" and unit_components[1].find("#") != -1:
             unit_components[0] = "APT"
@@ -214,7 +214,8 @@ class IPropertyAddress:
     def zip_code(self) -> str:
         return self._zip_code
 
-    def get_address_hash(self) -> str:
+    @property
+    def address_hash(self) -> str:
         return self._address_hash
 
     # This is index related
