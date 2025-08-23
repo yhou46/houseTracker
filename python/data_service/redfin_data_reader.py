@@ -2,7 +2,7 @@ from typing import Iterator, Callable, Any, Dict, Tuple
 from enum import Enum
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import os
 
 from crawler.redfin_spider.items import RedfinPropertyItem
@@ -76,6 +76,28 @@ PropertyDataStreamErrorHandlerType = Callable[[PropertyDataStreamParsingError], 
 # Placeholder error handler that raises the error
 def empty_data_stream_error_handler(error: PropertyDataStreamParsingError) -> None:
    raise error
+
+def parse_scraped_at_timestamp(scraped_at_str: str) -> datetime:
+    """
+    Parse scrapedAt timestamp, ensuring it's timezone-aware and in UTC.
+
+    Args:
+        scraped_at_str: ISO format timestamp string (with or without timezone info)
+
+    Returns:
+        datetime object in UTC timezone
+    """
+    # Parse the timestamp (works for both timezone-aware and timezone-naive formats)
+    dt = datetime.fromisoformat(scraped_at_str)
+
+    if dt.tzinfo is None:
+        # Timezone-naive datetime - assume Pacific Time (UTC-8)
+        pacific_tz = timezone(timedelta(hours=-8))
+        dt = dt.replace(tzinfo=pacific_tz)
+        return dt.astimezone(timezone.utc)
+    else:
+        # Already timezone-aware - convert to UTC if not already
+        return dt.astimezone(timezone.utc)
 
 type IPropertyDataStreamIteratorType = tuple[IPropertyMetadata, IPropertyHistory]
 class IPropertyDataStream(Iterator[IPropertyDataStreamIteratorType]):
@@ -250,11 +272,11 @@ def validate_redfin_property_entry(entry: RedfinPropertyEntry) -> None:
             error_data = entry.price
         )
 
-def parse_property_history(data: Dict[str, Any], property_id: str, address: IPropertyAddress) -> IPropertyHistory:
+def parse_property_history(data: Dict[str, Any], property_id: str, address: IPropertyAddress, last_updated: datetime) -> IPropertyHistory:
     if not isinstance(data, dict):
         raise ValueError("Data must be a dictionary")
     history_list = data.get('history', [])
-    property_history: IPropertyHistory = IPropertyHistory(address, [])
+    property_history: IPropertyHistory = IPropertyHistory(address, [], last_updated)
     for event in history_list:
         if not isinstance(event, dict):
             raise ValueError("Each history event must be a dictionary")
@@ -481,7 +503,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
     ]
 
     # Parse last update time
-    last_updated = datetime.fromisoformat(redfin_data.scrapedAt)
+    last_updated = parse_scraped_at_timestamp(redfin_data.scrapedAt)
 
     # Validate some logic
     if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
@@ -498,7 +520,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         )
 
     # Parse property history
-    history = parse_property_history(data, property_id, address)
+    history = parse_property_history(data, property_id, address, last_updated)
 
     # Legacy data doesn't have price
     if price is None and len(history.history) > 0:
@@ -517,7 +539,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         year_built = year_built,
         status = status,
         price = price,
-        last_updated= last_updated,
+        last_updated = last_updated,
         data_sources = data_source,
     )
     return property_meta, history

@@ -1,6 +1,6 @@
 import unittest
 import usaddress # type: ignore[import-untyped]
-from datetime import datetime
+from datetime import datetime, timezone
 
 from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, PropertyHistoryEventType
 from shared.iproperty_address import IPropertyAddress, get_address_components
@@ -267,13 +267,19 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
         self.assertFalse(event == "not an event")
 
 class Test_IPropertyHistory(unittest.TestCase):
+
+    def setUp(self):
+        """Set up test fixtures before each test method."""
+        super().setUp()
+        self.test_last_updated = datetime.now(timezone.utc)
+
     def test_history_events(self) -> None:
         address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
         events = [
             IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),
             IPropertyHistoryEvent("event2", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12346"),
         ]
-        history = IPropertyHistory(address, events)
+        history = IPropertyHistory(address, events, self.test_last_updated)
         self.assertEqual(len(history._history), 2)
         history.addEvent(IPropertyHistoryEvent("event3", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=950000, source="Redfin", source_id="12347"))
         self.assertEqual(len(history._history), 3)
@@ -289,13 +295,13 @@ class Test_IPropertyHistory(unittest.TestCase):
             IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),
             IPropertyHistoryEvent("event2", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=950000, source="Redfin", source_id="12346"),
         ]
-        history1 = IPropertyHistory(address, events1)
+        history1 = IPropertyHistory(address, events1, self.test_last_updated)
 
         # Create second history
         events2 = [
             IPropertyHistoryEvent("event3", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12347"),
         ]
-        history2 = IPropertyHistory(address, events2)
+        history2 = IPropertyHistory(address, events2, self.test_last_updated)
 
         # Merge histories
         merged = IPropertyHistory.merge_history(history1, history2)
@@ -317,8 +323,8 @@ class Test_IPropertyHistory(unittest.TestCase):
         event1 = IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
         event2 = IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
 
-        history1 = IPropertyHistory(address, [event1])
-        history2 = IPropertyHistory(address, [event2])
+        history1 = IPropertyHistory(address, [event1], self.test_last_updated)
+        history2 = IPropertyHistory(address, [event2], self.test_last_updated)
 
         # Merge histories
         merged = IPropertyHistory.merge_history(history1, history2)
@@ -338,8 +344,8 @@ class Test_IPropertyHistory(unittest.TestCase):
             IPropertyHistoryEvent("event2", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12346"),
         ]
 
-        history1 = IPropertyHistory(address, events)
-        history2 = IPropertyHistory(address, events)
+        history1 = IPropertyHistory(address, events, self.test_last_updated)
+        history2 = IPropertyHistory(address, events, self.test_last_updated)
 
         # Merge histories
         merged = IPropertyHistory.merge_history(history1, history2)
@@ -357,8 +363,8 @@ class Test_IPropertyHistory(unittest.TestCase):
         address1 = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
         address2 = IPropertyAddress("456 Oak Ave,Redmond, WA 98052")
 
-        history1 = IPropertyHistory(address1, [])
-        history2 = IPropertyHistory(address2, [])
+        history1 = IPropertyHistory(address1, [], self.test_last_updated)
+        history2 = IPropertyHistory(address2, [], self.test_last_updated)
 
         # Verify ValueError is raised
         with self.assertRaises(ValueError) as context:
@@ -393,7 +399,7 @@ class Test_IPropertyHistory(unittest.TestCase):
             IPropertyHistoryEvent("event2", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=950000, source="Redfin", source_id="12346"),
             IPropertyHistoryEvent("event3", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12347"),
         ]
-        history1 = IPropertyHistory(address, events1)
+        history1 = IPropertyHistory(address, events1, self.test_last_updated)
 
         # Create second history with some duplicates and new events
         events2 = [
@@ -401,7 +407,7 @@ class Test_IPropertyHistory(unittest.TestCase):
             IPropertyHistoryEvent("event4", datetime(2022, 2, 15), PropertyHistoryEventType.PriceChange, "Price increased", price=960000, source="Redfin", source_id="12348"),
             IPropertyHistoryEvent("event5", datetime(2022, 2, 20), PropertyHistoryEventType.Pending, "Pending", price=940000, source="Redfin", source_id="12349"),
         ]
-        history2 = IPropertyHistory(address, events2)
+        history2 = IPropertyHistory(address, events2, self.test_last_updated)
 
         # Merge histories
         merged = IPropertyHistory.merge_history(history1, history2)
@@ -427,10 +433,14 @@ class Test_IPropertyHistory(unittest.TestCase):
         address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
 
         # Test merging empty with non-empty
-        empty_history = IPropertyHistory(address, [])
-        non_empty_history = IPropertyHistory(address, [
-            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
-        ])
+        empty_history = IPropertyHistory(address, [], self.test_last_updated)
+        non_empty_history = IPropertyHistory(
+            address,
+            [
+                IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
+            ],
+            self.test_last_updated,
+            )
 
         # Merge empty with non-empty
         merged1 = IPropertyHistory.merge_history(empty_history, non_empty_history)

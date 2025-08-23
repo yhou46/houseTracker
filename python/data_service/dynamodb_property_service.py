@@ -727,7 +727,6 @@ def store_property_from_file(filename: str, table_name: str, region: str):
         count = 0
         for metadata, history in reader:
             count += 1
-            print(f"Property from file:\n{metadata}\n{history}")
 
             print("Start to save property to DynamoDB")
             dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
@@ -741,6 +740,8 @@ def store_property_from_file(filename: str, table_name: str, region: str):
             property_in_db = dynamoDbService.get_property_by_id(new_property.id)
             print(f"Property in DB: {property_in_db}")
             print(f"Property in DB equal to the input: {property_in_db == new_property}")
+            if property_in_db:
+                IProperty.compare_print_diff(new_property, property_in_db)
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
 
 if __name__ == "__main__":
@@ -769,6 +770,6 @@ if __name__ == "__main__":
     #     print(f"Property with address {address_str} not found")
 
     # Delete test
-    # property_id = "e2b9454b-7fe0-41c7-b3d1-83426b9f11b5"
+    # property_id = "b1d31573-2198-483a-a001-76fd4e21f73c"
     # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
     # dynamoDbService.delete_property_by_id(property_id)
