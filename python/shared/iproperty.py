@@ -95,14 +95,14 @@ class IPropertyHistoryEvent:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyHistoryEvent):
             return False
-        priceMatch = False
+        is_same_price = False
         if self.price is None or other.price is None:
-            priceMatch = (self.price == other.price)
+            is_same_price = (self.price == other.price)
         else:
-            priceMatch = math.isclose(self.price, other.price)
+            is_same_price = math.isclose(self.price, other.price)
         return (self._datetime == other._datetime and
                 self._event_type == other._event_type and
-                priceMatch and
+                is_same_price and
                 self._source == other._source and
                 self._source_id == other._source_id)
 
@@ -112,11 +112,11 @@ class IPropertyHistory:
             self,
             address: IPropertyAddress,
             history: List[IPropertyHistoryEvent],
-            last_updated: datetime | None = None
+            last_updated: datetime,
             ):
         self._history = history if history is not None else []
         self._address = address
-        self._last_updated = last_updated if last_updated is not None else datetime.now(timezone.utc)
+        self._last_updated = last_updated
 
     def addEvent(self, event: IPropertyHistoryEvent) -> None:
         self._history.append(event)
@@ -191,7 +191,7 @@ class IPropertyDataSource:
 
     def __str__(self) -> str:
         return f"Name: {self.source_name}, Source ID: {self.source_id}, URL: {self.source_url}"
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyDataSource):
             return False
@@ -223,7 +223,7 @@ class IPropertyBasic:
 
     def __str__(self) -> str:
         return f"Basic property information: \naddress: {self.address},\nproperty type: {self.property_type.value}, \narea: {self.area}, \nlot area: {self.lot_area}, \nnumberOfBedrooms: {self.number_of_bedrooms}, \nnumberOfBathrooms: {self.number_of_bathrooms}, \nyearBuilt: {self.year_built}"
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyBasic):
             return False
@@ -254,7 +254,7 @@ class IPropertyMetadata(IPropertyBasic):
         super().__init__(address, area, property_type, lot_area, number_of_bedrooms, number_of_bathrooms, year_built)
         self._status = status
         self._price = price
-        self._last_updated = last_updated if last_updated is not None else datetime.now(timezone.utc)
+        self._last_updated = last_updated
         self._data_sources = data_sources
 
     @property
@@ -278,13 +278,18 @@ class IPropertyMetadata(IPropertyBasic):
             super().__str__() +
             f",\nstatus: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
         )
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyMetadata):
             return False
+        is_same_price = False
+        if self.price is None or other.price is None:
+            is_same_price = (self.price == other.price)
+        else:
+            is_same_price = math.isclose(self.price, other.price)
         return (super().__eq__(other) and
                 self._status == other._status and
-                self._price == other._price and
+                is_same_price and
                 self._last_updated == other._last_updated and
                 self._data_sources == other._data_sources)
 
@@ -368,7 +373,7 @@ class IProperty():
             self._metadata.__str__() +
             f"\nHistory:\n{self._history.__str__()}"
         )
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IProperty):
             return False
@@ -378,6 +383,95 @@ class IProperty():
     @staticmethod
     def generate_id() -> str:
         return str(uuid.uuid4())
+
+    @staticmethod
+    def compare_print_diff(property1: "IProperty", property2: "IProperty"):
+        """
+        Compare two IProperty objects and print differences in their fields.
+
+        Args:
+            property1: First IProperty object to compare
+            property2: Second IProperty object to compare
+        """
+        print("=== Comparing IProperty objects ===")
+
+        # Compare metadata fields
+        meta1 = property1.metadata
+        meta2 = property2.metadata
+
+        # Address comparison
+        if meta1.address != meta2.address:
+            print(f"Address is different: {meta1.address} != {meta2.address}")
+
+        # Area comparison
+        if meta1.area != meta2.area:
+            print(f"Area is different: {meta1.area} != {meta2.area}")
+
+        # Property type comparison
+        if meta1.property_type != meta2.property_type:
+            print(f"Property type is different: {meta1.property_type.value} != {meta2.property_type.value}")
+
+        # Lot area comparison
+        if meta1.lot_area != meta2.lot_area:
+            print(f"Lot area is different: {meta1.lot_area} != {meta2.lot_area}")
+
+        # Number of bedrooms comparison
+        if meta1.number_of_bedrooms != meta2.number_of_bedrooms:
+            print(f"Number of bedrooms is different: {meta1.number_of_bedrooms} != {meta2.number_of_bedrooms}")
+
+        # Number of bathrooms comparison
+        if meta1.number_of_bathrooms != meta2.number_of_bathrooms:
+            print(f"Number of bathrooms is different: {meta1.number_of_bathrooms} != {meta2.number_of_bathrooms}")
+
+        # Year built comparison
+        if meta1.year_built != meta2.year_built:
+            print(f"Year built is different: {meta1.year_built} != {meta2.year_built}")
+
+        # Status comparison
+        if meta1.status != meta2.status:
+            print(f"Status is different: {meta1.status.value} != {meta2.status.value}")
+
+        # Price comparison (handle None values and floating point precision)
+        price1 = meta1.price
+        price2 = meta2.price
+        if price1 is None and price2 is None:
+            pass  # Both None, no difference
+        elif price1 is None or price2 is None:
+            print(f"Price is different: {price1} != {price2}")
+        elif not math.isclose(price1, price2):
+            print(f"Price is different: {price1} != {price2}")
+
+        # Last updated comparison
+        if meta1.last_updated != meta2.last_updated:
+            print(f"Last updated is different: {meta1.last_updated} != {meta2.last_updated}")
+
+        # Data sources comparison
+        if meta1.data_sources != meta2.data_sources:
+            print(f"Data sources are different:")
+            print(f"  Property1 sources: {[str(source) for source in meta1.data_sources]}")
+            print(f"  Property2 sources: {[str(source) for source in meta2.data_sources]}")
+
+        # History comparison
+        history1 = property1.history
+        history2 = property2.history
+
+        if history1.address != history2.address:
+            print(f"History address is different: {history1.address} != {history2.address}")
+
+        if history1.last_updated != history2.last_updated:
+            print(f"History last updated is different: {history1.last_updated} != {history2.last_updated}")
+
+        if len(history1.history) != len(history2.history):
+            print(f"History count is different: {len(history1.history)} != {len(history2.history)}")
+        else:
+            # Compare individual history events
+            for i, (event1, event2) in enumerate(zip(history1.history, history2.history)):
+                if event1 != event2:
+                    print(f"History event {i} is different:")
+                    print(f"  Event1: {event1}")
+                    print(f"  Event2: {event2}")
+
+        print("=== Comparison complete ===")
 
 # def merge_property(
 #     property1: IProperty,
