@@ -81,8 +81,65 @@ class InvalidAddressError(Exception):
     def __str__(self) -> str:
         return super().__str__() + f"Address: {self.address})"
 
+def preprocess_address_str(address_str: str) -> str:
+    """
+    Preprocess address string to handle special cases and normalize formatting.
+
+    Args:
+        address_str: Raw address string
+
+    Returns:
+        Preprocessed address string
+    """
+    # Handle cases like: 11170 (HS 24) NE 134th Ct NE, Redmond, WA 98052
+    # Make it to be 11170 NE 134th Ct NE (HomeSite 24), Redmond, WA 98052
+    start_idx = 0
+    # Find opening and close parenthesis
+    open_idx = address_str.find("(", start_idx)
+    close_idx = address_str.find(")", open_idx)
+    if open_idx != -1 and close_idx != -1 and open_idx < close_idx:
+
+        # Extract content between parentheses
+        content = address_str[open_idx + 1:close_idx].strip()
+
+        # Check if content starts with "HS"
+        if content.startswith("HS"):
+            # Find the comma that separates street address from city/state/zip
+            comma_idx = address_str.find(",", close_idx)
+            if comma_idx != -1 and close_idx < comma_idx:
+                # Extract the street address part (from start to comma)
+                parts_before_parenthesis = address_str[:open_idx].strip()
+                parts_after_parenthesis = address_str[close_idx+1 : comma_idx]
+
+                # Extract the city/state/zip part (from comma onwards)
+                other_part = address_str[comma_idx:]
+
+                # Remove the (HS ...) from the beginning and add it to the end of street
+                homesite_part = f"({content})"  # Keep original HS, don't convert to HomeSite yet
+
+                print(f"street part: {parts_before_parenthesis}, other_part: {other_part}, content: {content}")
+
+                # Reconstruct: street + homesite + city
+                address_str = f"{parts_before_parenthesis}{parts_after_parenthesis} {homesite_part}{other_part}"
+
+                # Convert HS to HomeSite in the moved part
+                address_str = address_str.replace("HS", "APT", 1)
+                address_str = address_str.replace("#", "", 1)
+
+            # Update start index to continue searching
+            # start_idx = len(street_part) + len(homesite_part) + 1
+
+    # Remove remaining parentheses (for other cases)
+    address_str = address_str.replace("(", "")
+    address_str = address_str.replace(")", "")
+
+    return address_str
+
 def get_address_components(address: str, logger: logging.Logger | None = None) -> Dict[str, str]:
     try:
+        # Preprocess address string
+        address = preprocess_address_str(address)
+
         components: Dict[str, str] = {}
         # Parse address string
         parsed_address = usaddress.tag(address)

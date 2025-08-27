@@ -118,6 +118,9 @@ class IPropertyHistory:
         self._address = address
         self._last_updated = last_updated
 
+        # Sort history event
+        self._history.sort(key = lambda event: event._datetime) # Sort by date
+
     def addEvent(self, event: IPropertyHistoryEvent) -> None:
         self._history.append(event)
         self._history.sort(key = lambda event: event._datetime) # Sort by date
