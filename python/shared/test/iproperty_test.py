@@ -1,6 +1,7 @@
 import unittest
 import usaddress # type: ignore[import-untyped]
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, PropertyHistoryEventType
 from shared.iproperty_address import IPropertyAddress, get_address_components
@@ -44,7 +45,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -53,7 +54,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertEqual(event1, event2)
 
@@ -66,7 +67,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event2",  # Different ID
@@ -75,7 +76,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertEqual(event1, event2)
 
@@ -88,7 +89,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -97,7 +98,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed for sale",  # Different description
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertEqual(event1, event2)
 
@@ -110,7 +111,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -119,7 +120,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertNotEqual(event1, event2)
 
@@ -132,7 +133,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -141,7 +142,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertNotEqual(event1, event2)
 
@@ -154,7 +155,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -163,7 +164,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=950000  # Different price
+            price=Decimal(950000)  # Different price
         )
         self.assertNotEqual(event1, event2)
 
@@ -176,7 +177,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -185,7 +186,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Zillow",  # Different source
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertNotEqual(event1, event2)
 
@@ -198,7 +199,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="12345",
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -207,7 +208,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id="67890",  # Different source ID
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertNotEqual(event1, event2)
 
@@ -242,7 +243,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id=None,
-            price=1000000
+            price=Decimal(1000000)
         )
         event2 = IPropertyHistoryEvent(
             "event1",
@@ -251,7 +252,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
             "Listed",
             source="Redfin",
             source_id=None,
-            price=1000000
+            price=Decimal(1000000)
         )
         self.assertEqual(event1, event2)
 
@@ -276,12 +277,12 @@ class Test_IPropertyHistory(unittest.TestCase):
     def test_history_events(self) -> None:
         address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
         events = [
-            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),
-            IPropertyHistoryEvent("event2", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12346"),
+            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345"),
+            IPropertyHistoryEvent("event2", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=Decimal(940000), source="Redfin", source_id="12346"),
         ]
         history = IPropertyHistory(address, events, self.test_last_updated)
         self.assertEqual(len(history._history), 2)
-        history.addEvent(IPropertyHistoryEvent("event3", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=950000, source="Redfin", source_id="12347"))
+        history.addEvent(IPropertyHistoryEvent("event3", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=Decimal(950000), source="Redfin", source_id="12347"))
         self.assertEqual(len(history._history), 3)
 
         self.assertEqual(history._history[2]._event_type, PropertyHistoryEventType.Sold)
@@ -292,14 +293,14 @@ class Test_IPropertyHistory(unittest.TestCase):
 
         # Create first history
         events1 = [
-            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),
-            IPropertyHistoryEvent("event2", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=950000, source="Redfin", source_id="12346"),
+            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345"),
+            IPropertyHistoryEvent("event2", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=Decimal(950000), source="Redfin", source_id="12346"),
         ]
         history1 = IPropertyHistory(address, events1, self.test_last_updated)
 
         # Create second history
         events2 = [
-            IPropertyHistoryEvent("event3", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12347"),
+            IPropertyHistoryEvent("event3", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=Decimal(940000), source="Redfin", source_id="12347"),
         ]
         history2 = IPropertyHistory(address, events2, self.test_last_updated)
 
@@ -320,8 +321,8 @@ class Test_IPropertyHistory(unittest.TestCase):
         address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
 
         # Create identical events
-        event1 = IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
-        event2 = IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
+        event1 = IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345")
+        event2 = IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345")
 
         history1 = IPropertyHistory(address, [event1], self.test_last_updated)
         history2 = IPropertyHistory(address, [event2], self.test_last_updated)
@@ -332,7 +333,7 @@ class Test_IPropertyHistory(unittest.TestCase):
         # Verify duplicate was removed
         self.assertEqual(len(merged.history), 1)
         self.assertEqual(merged.history[0].event_type, PropertyHistoryEventType.Listed)
-        self.assertEqual(merged.history[0].price, 1000000)
+        self.assertEqual(merged.history[0].price, Decimal(1000000))
 
     def test_identical_history_merge(self) -> None:
         """Test merging two identical histories - result should be exactly the same."""
@@ -340,8 +341,8 @@ class Test_IPropertyHistory(unittest.TestCase):
 
         # Create identical events
         events = [
-            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),
-            IPropertyHistoryEvent("event2", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12346"),
+            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345"),
+            IPropertyHistoryEvent("event2", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=Decimal(940000), source="Redfin", source_id="12346"),
         ]
 
         history1 = IPropertyHistory(address, events, self.test_last_updated)
@@ -355,7 +356,7 @@ class Test_IPropertyHistory(unittest.TestCase):
         self.assertEqual(merged.address, address)
         self.assertEqual(merged.history[0].event_type, PropertyHistoryEventType.Listed)
         self.assertEqual(merged.history[1].event_type, PropertyHistoryEventType.Sold)
-        self.assertEqual(merged.history[0].price, 1000000)
+        self.assertEqual(merged.history[0].price, Decimal(1000000))
         self.assertEqual(merged.history[1].price, 940000)
 
     def test_different_address_validation(self) -> None:
@@ -395,17 +396,17 @@ class Test_IPropertyHistory(unittest.TestCase):
 
         # Create first history
         events1 = [
-            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),
-            IPropertyHistoryEvent("event2", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=950000, source="Redfin", source_id="12346"),
-            IPropertyHistoryEvent("event3", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=940000, source="Redfin", source_id="12347"),
+            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345"),
+            IPropertyHistoryEvent("event2", datetime(2022, 2, 1), PropertyHistoryEventType.PriceChange, "Price dropped", price=Decimal(950000), source="Redfin", source_id="12346"),
+            IPropertyHistoryEvent("event3", datetime(2022, 3, 1), PropertyHistoryEventType.Sold, "Sold", price=Decimal(940000), source="Redfin", source_id="12347"),
         ]
         history1 = IPropertyHistory(address, events1, self.test_last_updated)
 
         # Create second history with some duplicates and new events
         events2 = [
-            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345"),  # duplicate
-            IPropertyHistoryEvent("event4", datetime(2022, 2, 15), PropertyHistoryEventType.PriceChange, "Price increased", price=960000, source="Redfin", source_id="12348"),
-            IPropertyHistoryEvent("event5", datetime(2022, 2, 20), PropertyHistoryEventType.Pending, "Pending", price=940000, source="Redfin", source_id="12349"),
+            IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345"),  # duplicate
+            IPropertyHistoryEvent("event4", datetime(2022, 2, 15), PropertyHistoryEventType.PriceChange, "Price increased", price=Decimal(960000), source="Redfin", source_id="12348"),
+            IPropertyHistoryEvent("event5", datetime(2022, 2, 20), PropertyHistoryEventType.Pending, "Pending", price=Decimal(940000), source="Redfin", source_id="12349"),
         ]
         history2 = IPropertyHistory(address, events2, self.test_last_updated)
 
@@ -437,7 +438,7 @@ class Test_IPropertyHistory(unittest.TestCase):
         non_empty_history = IPropertyHistory(
             address,
             [
-                IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=1000000, source="Redfin", source_id="12345")
+                IPropertyHistoryEvent("event1", datetime(2022, 1, 1), PropertyHistoryEventType.Listed, "Listed", price=Decimal(1000000), source="Redfin", source_id="12345")
             ],
             self.test_last_updated,
             )
