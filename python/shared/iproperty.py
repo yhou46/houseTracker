@@ -2,11 +2,13 @@ from enum import Enum
 from datetime import datetime, timezone
 from typing import List
 import math
+from decimal import Decimal
 
 import uuid
 import logging
 
 from shared.iproperty_address import IPropertyAddress
+
 
 class AreaUnit(Enum):
     SquareFeet = "SquareFeet"
@@ -14,8 +16,8 @@ class AreaUnit(Enum):
     Acres = "Acres"
 
 class PropertyArea:
-    def __init__(self, value: float, unit: AreaUnit = AreaUnit.SquareFeet):
-        self.value: float = value
+    def __init__(self, value: Decimal, unit: AreaUnit = AreaUnit.SquareFeet):
+        self.value: Decimal = value
         self.unit: AreaUnit = unit
 
     def __eq__(self, value: object) -> bool:
@@ -57,7 +59,7 @@ class IPropertyHistoryEvent:
             description: str,
             source: str | None = None,
             source_id: str | None = None,
-            price: float | None = None,
+            price: Decimal | None = None,
             ):
         self._id = id
         self._datetime = datetime
@@ -80,7 +82,7 @@ class IPropertyHistoryEvent:
     def description(self) -> str:
         return self._description
     @property
-    def price(self) -> float | None:
+    def price(self) -> Decimal | None:
         return self._price
     @property
     def source(self) -> str | None:
@@ -106,6 +108,64 @@ class IPropertyHistoryEvent:
                 self._source == other._source and
                 self._source_id == other._source_id)
 
+    def __lt__(self, other: object) -> bool:
+        """Enable sorting by: datetime -> event_type -> price -> source -> source_id -> description"""
+        if not isinstance(other, IPropertyHistoryEvent):
+            return NotImplemented
+        
+        # Compare datetime first
+        if self._datetime != other._datetime:
+            return self._datetime < other._datetime
+        
+        # If datetime is equal, compare event_type
+        if self._event_type != other._event_type:
+            return self._event_type.value < other._event_type.value
+        
+        # If event_type is equal, compare price
+        if self._price != other._price:
+            # Handle None values - None is considered less than any number
+            if self._price is None:
+                return True
+            if other._price is None:
+                return False
+            return self._price < other._price
+        
+        # If price is equal, compare source
+        if self._source != other._source:
+            # Handle None values - None is considered less than any string
+            if self._source is None:
+                return True
+            if other._source is None:
+                return False
+            return self._source < other._source
+        
+        # If source is equal, compare source_id
+        if self._source_id != other._source_id:
+            # Handle None values - None is considered less than any string
+            if self._source_id is None:
+                return True
+            if other._source_id is None:
+                return False
+            return self._source_id < other._source_id
+        
+        # If source_id is equal, compare description
+        return self._description < other._description
+
+    def __le__(self, other: object) -> bool:
+        if not isinstance(other, IPropertyHistoryEvent):
+            return NotImplemented
+        return self < other or self == other
+
+    def __gt__(self, other: object) -> bool:
+        if not isinstance(other, IPropertyHistoryEvent):
+            return NotImplemented
+        return not (self <= other)
+
+    def __ge__(self, other: object) -> bool:
+        if not isinstance(other, IPropertyHistoryEvent):
+            return NotImplemented
+        return not (self < other)
+
 # All prices are in USD
 class IPropertyHistory:
     def __init__(
@@ -119,11 +179,11 @@ class IPropertyHistory:
         self._last_updated = last_updated
 
         # Sort history event
-        self._history.sort(key = lambda event: event._datetime) # Sort by date
+        self._history.sort() # Now uses natural sorting via __lt__ method
 
     def addEvent(self, event: IPropertyHistoryEvent) -> None:
         self._history.append(event)
-        self._history.sort(key = lambda event: event._datetime) # Sort by date
+        self._history.sort() # Now uses natural sorting via __lt__ method
 
     @property
     def address(self) -> IPropertyAddress:
@@ -150,8 +210,8 @@ class IPropertyHistory:
         for event in combined_events:
             if event not in unique_events:
                 unique_events.append(event)
-        # Optionally, sort by event datetime
-        unique_events.sort(key=lambda event: event.datetime)
+        # Sort by event datetime using natural ordering
+        unique_events.sort()
         # Use the latest last_updated
         last_updated = max(history1.last_updated, history2.last_updated)
         return IPropertyHistory(
@@ -212,8 +272,8 @@ class IPropertyBasic:
         area: PropertyArea,
         property_type: PropertyType,
         lot_area: PropertyArea | None,
-        number_of_bedrooms: float,
-        number_of_bathrooms: float,
+        number_of_bedrooms: Decimal,
+        number_of_bathrooms: Decimal,
         year_built: int | None,
     ):
         self.address = address
@@ -246,11 +306,11 @@ class IPropertyMetadata(IPropertyBasic):
         area: PropertyArea,
         property_type: PropertyType,
         lot_area: PropertyArea | None,
-        number_of_bedrooms: float,
-        number_of_bathrooms: float,
+        number_of_bedrooms: Decimal,
+        number_of_bathrooms: Decimal,
         year_built: int | None,
         status: PropertyStatus,
-        price: float | None,
+        price: Decimal | None,
         last_updated: datetime,
         data_sources: List[IPropertyDataSource] = [],
     ):
@@ -265,7 +325,7 @@ class IPropertyMetadata(IPropertyBasic):
         return self._status
 
     @property
-    def price(self) -> float | None:
+    def price(self) -> Decimal | None:
         return self._price
 
     @property
@@ -329,11 +389,11 @@ class IProperty():
         return self._metadata.lot_area
 
     @property
-    def number_of_bedrooms(self) -> float:
+    def number_of_bedrooms(self) -> Decimal:
         return self._metadata.number_of_bedrooms
 
     @property
-    def number_of_bathrooms(self) -> float:
+    def number_of_bathrooms(self) -> Decimal:
         return self._metadata.number_of_bathrooms
 
     @property
@@ -349,7 +409,7 @@ class IProperty():
         return self._metadata.last_updated
 
     @property
-    def price(self) -> float | None:
+    def price(self) -> Decimal | None:
         return self._metadata._price
 
     @property
@@ -434,7 +494,7 @@ class IProperty():
         if meta1.status != meta2.status:
             print(f"Status is different: {meta1.status.value} != {meta2.status.value}")
 
-        # Price comparison (handle None values and floating point precision)
+        # Price comparison (handle None values and Decimaling point precision)
         price1 = meta1.price
         price2 = meta2.price
         if price1 is None and price2 is None:
@@ -499,17 +559,17 @@ if __name__ == "__main__":
     # Test the IPropertyAddress class
     address = "1838 Market St,Kirkland, WA 98033"
     address_obj = IPropertyAddress(address)
-    area = PropertyArea(2879)
+    area = PropertyArea(Decimal(2879))
     print(address_obj)
 
     # Test the IPropertyBasic class
     property1 = IPropertyBasic(
         IPropertyAddress(address),
-        PropertyArea(1700, AreaUnit.SquareFeet),
+        PropertyArea(Decimal(1700), AreaUnit.SquareFeet),
         PropertyType.SingleFamily,
         area,
-        3,
-        2.5,
+        Decimal(3),
+        Decimal(2.5),
         1899,
     )
 

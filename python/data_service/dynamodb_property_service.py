@@ -257,7 +257,7 @@ def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
     area_data = property_item.get(DynamoDbPropertyTableAttributeName.Area.value)
     if not area_data:
         raise ValueError("Area information is required but not found in DynamoDB item")
-    area_value = float(area_data[DynamoDbPropertyTableAttributeName.Area_Value.value])
+    area_value = Decimal(area_data[DynamoDbPropertyTableAttributeName.Area_Value.value])
     area_unit = AreaUnit(area_data[DynamoDbPropertyTableAttributeName.Area_Unit.value])
     area = PropertyArea(area_value, area_unit)
 
@@ -268,13 +268,13 @@ def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
     lot_area_data = property_item.get(DynamoDbPropertyTableAttributeName.LotArea.value)
     lot_area = None
     if lot_area_data:
-        lot_area_value = float(lot_area_data[DynamoDbPropertyTableAttributeName.LotArea_Value.value])
+        lot_area_value = Decimal(lot_area_data[DynamoDbPropertyTableAttributeName.LotArea_Value.value])
         lot_area_unit = AreaUnit(lot_area_data[DynamoDbPropertyTableAttributeName.LotArea_Unit.value])
         lot_area = PropertyArea(lot_area_value, lot_area_unit)
 
     # Extract bedrooms and bathrooms
-    number_of_bedrooms = float(property_item[DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value]) if property_item.get(DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value) is not None else 0.0
-    number_of_bathrooms = float(property_item[DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value]) if property_item.get(DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value) is not None else 0.0
+    number_of_bedrooms = Decimal(property_item[DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value]) if property_item.get(DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value) is not None else Decimal(0)
+    number_of_bathrooms = Decimal(property_item[DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value]) if property_item.get(DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value) is not None else Decimal(0)
 
     # Extract year built
     year_built = property_item.get(DynamoDbPropertyTableAttributeName.YearBuilt.value)
@@ -283,7 +283,7 @@ def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
     status = PropertyStatus(property_item[DynamoDbPropertyTableAttributeName.Status.value])
 
     # Extract price
-    price = float(property_item[DynamoDbPropertyTableAttributeName.Price.value]) if property_item.get(DynamoDbPropertyTableAttributeName.Price.value) is not None else None
+    price = Decimal(property_item[DynamoDbPropertyTableAttributeName.Price.value]) if property_item.get(DynamoDbPropertyTableAttributeName.Price.value) is not None else None
 
     # Extract last updated
     last_updated = datetime.fromisoformat(property_item[DynamoDbPropertyTableAttributeName.LastUpdated.value])
@@ -328,7 +328,7 @@ def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
         # Extract other event properties
         event_type = PropertyHistoryEventType(history_item[DynamoDbPropertyTableAttributeName.HistoryEventType.value])
         description = history_item[DynamoDbPropertyTableAttributeName.HistoryEventDescription.value]
-        event_price = float(history_item[DynamoDbPropertyTableAttributeName.HistoryEventPrice.value]) if history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventPrice.value) is not None else None
+        event_price = Decimal(history_item[DynamoDbPropertyTableAttributeName.HistoryEventPrice.value]) if history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventPrice.value) is not None else None
         source = history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventSource.value)
         source_id = history_item.get(DynamoDbPropertyTableAttributeName.HistoryEventSourceId.value)
 
@@ -620,6 +620,7 @@ class DynamoDBServiceForProperty:
             bool: True if deletion was successful, False otherwise.
         """
         try:
+            self.logger.info(f"Will delete property with id: {property_id}")
             property_items = self._query_items_by_property_id(property_id)
 
             with self.table.batch_writer() as writer:
@@ -736,12 +737,17 @@ def store_property_from_file(filename: str, table_name: str, region: str):
             #     break
 
             # Check if record in db equal to the input
-            print(f"Checking if the first property exists in DynamoDB")
             property_in_db = dynamoDbService.get_property_by_id(new_property.id)
             print(f"Property in DB: {property_in_db}")
             print(f"Property in DB equal to the input: {property_in_db == new_property}")
-            if property_in_db:
-                IProperty.compare_print_diff(new_property, property_in_db)
+
+            if property_in_db == None:
+                raise ValueError(f"Failed to get property in DB: {new_property.id}")
+
+            if property_in_db != new_property:
+                if property_in_db:
+                    IProperty.compare_print_diff(new_property, property_in_db)
+                raise ValueError(f"Saved property is not equal to the one in DB, address: {property_in_db.address}, property id: {property_in_db.id}")
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
 
 if __name__ == "__main__":
@@ -753,7 +759,7 @@ if __name__ == "__main__":
     region = "us-west-2"
 
     # Read from file and save to DynamoDB
-    store_property_from_file("redfin_properties_20250707_223231.jsonl", table_name, region)
+    store_property_from_file("redfin_properties_20250707_223604.jsonl", table_name, region)
 
     # Write test
     # run_save_test(table_name, region)
@@ -770,6 +776,6 @@ if __name__ == "__main__":
     #     print(f"Property with address {address_str} not found")
 
     # Delete test
-    # property_id = "b1d31573-2198-483a-a001-76fd4e21f73c"
+    # property_id = "25738d02-56df-4bd4-959e-144cd7eb5e12"
     # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
     # dynamoDbService.delete_property_by_id(property_id)

@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime, timezone, timedelta
 import os
+from decimal import Decimal
 
 from crawler.redfin_spider.items import RedfinPropertyItem
 from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
@@ -30,7 +31,7 @@ class RedfinPropertyEntry:
             numberOfBathrooms: float | None,
             yearBuilt: int | None,
             status: str,
-            price: float | None,
+            price: Decimal | None,
             readyToBuildTag: bool | None,
             ):
         self.url = url
@@ -422,7 +423,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
             error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
             error_data = redfin_data.area,
         )
-    area_number = float(area_parts[0])
+    area_number = Decimal(area_parts[0])
     if area_parts[1].lower() == "sqft":
         area_unit = AreaUnit.SquareFeet
     elif area_parts[1].lower() == "acres":
@@ -451,7 +452,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
                 error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
                 error_data = redfin_data.lotArea,
             )
-        lot_area_number = float(lot_area_parts[0])
+        lot_area_number = Decimal(lot_area_parts[0])
         normalized_unit = "".join(lot_area_parts[1:]).lower()
         if normalized_unit == "sqft" or normalized_unit == "squarefeet":
             lot_area_unit = AreaUnit.SquareFeet
@@ -470,8 +471,8 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         lot_area = PropertyArea(lot_area_number, lot_area_unit)
 
     # Parse number of bedrooms and bathrooms
-    number_of_bedrooms = float(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
-    number_of_bathrooms = float(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
+    number_of_bedrooms = Decimal(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
+    number_of_bathrooms = Decimal(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
     year_built = redfin_data.yearBuilt
 
     # Parse status
