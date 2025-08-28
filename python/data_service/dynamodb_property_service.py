@@ -5,6 +5,7 @@ import logging
 from enum import Enum
 import os
 from decimal import Decimal
+import time
 
 import boto3
 from mypy_boto3_dynamodb.type_defs import AttributeDefinitionTypeDef, KeySchemaElementTypeDef, GlobalSecondaryIndexTypeDef, GlobalSecondaryIndexOutputTypeDef
@@ -584,6 +585,7 @@ class DynamoDBServiceForProperty:
                 property_history,
             )
             self.logger.info(f"Generating property id: {new_property.id}")
+            self.logger.info(f"New property info:\n{new_property}\n")
 
         self.logger.info(f"Saving property with ID {new_property.id}, address hash: {new_property.address.address_hash} to DynamoDB.")
         self._write_property(new_property)
@@ -726,20 +728,15 @@ def store_property_from_file(filename: str, table_name: str, region: str):
         reader: IPropertyDataStream = RedfinFileDataReader(property_data_file, file_error_handler)
 
         count = 0
+        print("Start to save property to DynamoDB")
         for metadata, history in reader:
-            count += 1
-
-            print("Start to save property to DynamoDB")
             dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
             new_property = dynamoDbService.create_or_update_property(metadata, history)
 
-            # if count == 1:
-            #     break
-
             # Check if record in db equal to the input
             property_in_db = dynamoDbService.get_property_by_id(new_property.id)
-            print(f"Property in DB: {property_in_db}")
-            print(f"Property in DB equal to the input: {property_in_db == new_property}")
+            # print(f"Property in DB: {property_in_db}")
+            # print(f"Property in DB equal to the input: {property_in_db == new_property}")
 
             if property_in_db == None:
                 raise ValueError(f"Failed to get property in DB: {new_property.id}")
@@ -748,6 +745,11 @@ def store_property_from_file(filename: str, table_name: str, region: str):
                 if property_in_db:
                     IProperty.compare_print_diff(new_property, property_in_db)
                 raise ValueError(f"Saved property is not equal to the one in DB, address: {property_in_db.address}, property id: {property_in_db.id}")
+
+            count += 1
+            if count % 100 == 0:
+                print(f"Processed count: {count}, sleep for 10 seconds")
+                time.sleep(10)
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
 
 if __name__ == "__main__":
@@ -758,15 +760,27 @@ if __name__ == "__main__":
     table_name = "properties"
     region = "us-west-2"
 
+    # Input file
+    file_name = "redfin_properties_20250709_223613.jsonl"
+
     # Read from file and save to DynamoDB
-    store_property_from_file("redfin_properties_20250707_223604.jsonl", table_name, region)
+    # store_property_from_file(file_name, table_name, region)
 
     # Write test
     # run_save_test(table_name, region)
 
     # Read test
-    # property_id = "f167cf57-db57-406b-9fa8-9ca566741b20"
-    # address_str = "655 Crockett St Unit B304, Seattle, WA 98109"
+    # Query by id
+    property_id = "396cf426-5165-49f3-ae36-a5a808f4cbc3"
+    dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    property_obj = dynamoDbService.get_property_by_id(property_id)
+    if property_obj:
+        print(f"Retrieved property by id: {property_id}")
+    else:
+        print(f"Property with address {property_id} not found")
+
+    # Query by address
+    # address_str = "18121 NE 129th Pl, Redmond, WA 98052"
     # address_obj = IPropertyAddress(address_str)
     # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
     # property_obj = dynamoDbService.get_property_by_address(address_obj)

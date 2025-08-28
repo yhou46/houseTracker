@@ -112,15 +112,15 @@ class IPropertyHistoryEvent:
         """Enable sorting by: datetime -> event_type -> price -> source -> source_id -> description"""
         if not isinstance(other, IPropertyHistoryEvent):
             return NotImplemented
-        
+
         # Compare datetime first
         if self._datetime != other._datetime:
             return self._datetime < other._datetime
-        
+
         # If datetime is equal, compare event_type
         if self._event_type != other._event_type:
             return self._event_type.value < other._event_type.value
-        
+
         # If event_type is equal, compare price
         if self._price != other._price:
             # Handle None values - None is considered less than any number
@@ -129,7 +129,7 @@ class IPropertyHistoryEvent:
             if other._price is None:
                 return False
             return self._price < other._price
-        
+
         # If price is equal, compare source
         if self._source != other._source:
             # Handle None values - None is considered less than any string
@@ -138,7 +138,7 @@ class IPropertyHistoryEvent:
             if other._source is None:
                 return False
             return self._source < other._source
-        
+
         # If source is equal, compare source_id
         if self._source_id != other._source_id:
             # Handle None values - None is considered less than any string
@@ -147,7 +147,7 @@ class IPropertyHistoryEvent:
             if other._source_id is None:
                 return False
             return self._source_id < other._source_id
-        
+
         # If source_id is equal, compare description
         return self._description < other._description
 
@@ -198,14 +198,16 @@ class IPropertyHistory:
         return self._last_updated
 
     @staticmethod
-    def merge_history(history1: "IPropertyHistory", history2: "IPropertyHistory") -> "IPropertyHistory":
+    def merge_history(existing_history: "IPropertyHistory", new_history: "IPropertyHistory") -> "IPropertyHistory":
         """
-        Merge two IPropertyHistory objects, combining their events and removing duplicates.
+        Merge two IPropertyHistory objects, new events from new_history will be added to existing_history.
+        Existing events in existing_history is unchanged and duplicates from new_history will be removed and e
         """
-        if history1.address != history2.address:
+        if existing_history.address != new_history.address:
             raise ValueError("Cannot merge histories with different addresses")
 
-        combined_events = history1.history + history2.history
+        # The order matters: existing_history should be first to keep existing events
+        combined_events = existing_history.history + new_history.history
         unique_events = []
         for event in combined_events:
             if event not in unique_events:
@@ -213,16 +215,16 @@ class IPropertyHistory:
         # Sort by event datetime using natural ordering
         unique_events.sort()
         # Use the latest last_updated
-        last_updated = max(history1.last_updated, history2.last_updated)
+        last_updated = max(existing_history.last_updated, new_history.last_updated)
         return IPropertyHistory(
-            address=history1.address,
+            address=existing_history.address,
             history=unique_events,
             last_updated=last_updated,
         )
 
     def __str__(self) -> str:
         history_str = "\n".join(str(event) for event in self._history)
-        return f"Address: {self._address.address_hash},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"Address: {self._address.address_hash},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.isoformat()}"
 
     def __eq__(self, value) -> bool:
         if not isinstance(value, IPropertyHistory):
@@ -339,7 +341,7 @@ class IPropertyMetadata(IPropertyBasic):
     def __str__(self) -> str:
         return (
             super().__str__() +
-            f",\nstatus: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.strftime('%Y-%m-%d %H:%M:%S')}"
+            f",\nstatus: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.isoformat()}"
         )
 
     def __eq__(self, other: object) -> bool:
