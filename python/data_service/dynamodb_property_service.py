@@ -8,14 +8,34 @@ from decimal import Decimal
 import time
 
 import boto3
-from mypy_boto3_dynamodb.type_defs import AttributeDefinitionTypeDef, KeySchemaElementTypeDef, GlobalSecondaryIndexTypeDef, GlobalSecondaryIndexOutputTypeDef
+from mypy_boto3_dynamodb.type_defs import (
+    AttributeDefinitionTypeDef,
+    KeySchemaElementTypeDef,
+    GlobalSecondaryIndexTypeDef,
+    GlobalSecondaryIndexOutputTypeDef,
+)
 from mypy_boto3_dynamodb.client import DynamoDBClient
 from botocore.exceptions import ClientError
 
+from shared.iproperty import (
+    IProperty,
+    PropertyType,
+    IPropertyHistory,
+    IPropertyHistoryEvent,
+    IPropertyAddress,
+    PropertyArea,
+    AreaUnit,
+    PropertyStatus,
+    IPropertyDataSource,
+    IPropertyMetadata,
+    PropertyHistoryEventType,
+)
 
-from shared.iproperty import IProperty, PropertyType, IPropertyHistory, IPropertyHistoryEvent, IPropertyAddress, PropertyArea, AreaUnit, PropertyStatus, IPropertyDataSource, IPropertyMetadata, PropertyHistoryEventType
-
-from data_service.redfin_data_reader import RedfinFileDataReader, PropertyDataStreamParsingError, IPropertyDataStream
+from data_service.redfin_data_reader import (
+    RedfinFileDataReader,
+    PropertyDataStreamParsingError,
+    IPropertyDataStream,
+)
 
 class DynamoDbPropertyTableEntityType(Enum):
     Property = "PROPERTY"
@@ -536,7 +556,7 @@ class DynamoDBServiceForProperty:
             self.logger.info(f"Get items from DB by address {address.address_hash}: {items}")
 
             if not items:
-                self.logger.warning(f"No property found with address {address.address_hash}")
+                self.logger.info(f"No property found with address {address.address_hash}")
                 return None
 
             # Get the property ID from the first item (all items should have the same property ID)
@@ -555,7 +575,7 @@ class DynamoDBServiceForProperty:
             self.logger.error(f"Error retrieving property with address {address}: {error.response['Error']['Message']}")
             raise error
 
-    # TODO: need to check if the property already exists and merge the history if possible; do NOT overwrite the existing property
+    # TODO: need to skip update if no new entries exist in the record
     def create_or_update_property(self, property_metadata: IPropertyMetadata, property_history: IPropertyHistory) -> IProperty:
         """
         Create or update a property in the DynamoDB table.
@@ -634,6 +654,10 @@ class DynamoDBServiceForProperty:
         except ClientError as error:
             self.logger.error(f"Error deleting property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
+
+    def close(self):
+        if self.dynamodb_client:
+            self.dynamodb_client.close()
 
 def run_save_test(table_name: str, region: str):
     # Load IProperty
@@ -726,11 +750,11 @@ def store_property_from_file(filename: str, table_name: str, region: str):
             error_file.flush()
 
         reader: IPropertyDataStream = RedfinFileDataReader(property_data_file, file_error_handler)
+        dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
 
         count = 0
         print("Start to save property to DynamoDB")
         for metadata, history in reader:
-            dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
             new_property = dynamoDbService.create_or_update_property(metadata, history)
 
             # Check if record in db equal to the input
@@ -761,7 +785,7 @@ if __name__ == "__main__":
     region = "us-west-2"
 
     # Input file
-    file_name = "redfin_properties_20250709_223613.jsonl"
+    file_name = "redfin_properties_20250710_175005-2.jsonl"
 
     # Read from file and save to DynamoDB
     # store_property_from_file(file_name, table_name, region)
@@ -771,23 +795,23 @@ if __name__ == "__main__":
 
     # Read test
     # Query by id
-    property_id = "396cf426-5165-49f3-ae36-a5a808f4cbc3"
-    dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    property_obj = dynamoDbService.get_property_by_id(property_id)
-    if property_obj:
-        print(f"Retrieved property by id: {property_id}")
-    else:
-        print(f"Property with address {property_id} not found")
+    # property_id = "e329420e-4dc6-4d88-bfe7-222a268c82b9"
+    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    # property_obj = dynamoDbService.get_property_by_id(property_id)
+    # if property_obj:
+    #     print(f"Retrieved property by id: {property_id}")
+    # else:
+    #     print(f"Property with address {property_id} not found")
 
     # Query by address
-    # address_str = "18121 NE 129th Pl, Redmond, WA 98052"
-    # address_obj = IPropertyAddress(address_str)
-    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    # property_obj = dynamoDbService.get_property_by_address(address_obj)
-    # if property_obj:
-    #     print(f"Retrieved property by address: {property_obj}")
-    # else:
-    #     print(f"Property with address {address_str} not found")
+    address_str = "19833 95th Ave NE, Bothell, WA 98011"
+    address_obj = IPropertyAddress(address_str)
+    dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    property_obj = dynamoDbService.get_property_by_address(address_obj)
+    if property_obj:
+        print(f"Retrieved property by address: {property_obj}")
+    else:
+        print(f"Property with address {address_str} not found")
 
     # Delete test
     # property_id = "25738d02-56df-4bd4-959e-144cd7eb5e12"
