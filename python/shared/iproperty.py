@@ -48,6 +48,7 @@ class PropertyHistoryEventType(Enum):
     Contingent = "Contingent"
     ListedForRent = "ListedForRent"
     RentalRemoved = "RentalRemoved"
+    ListRemoved = "ListRemoved"
     Other = "Other"
 
 class IPropertyHistoryEvent:
@@ -210,6 +211,8 @@ class IPropertyHistory:
         combined_events = existing_history.history + new_history.history
         unique_events = []
         for event in combined_events:
+            # TODO: there is one case: some events are missing some fields but later the field gets added
+            # Example: PriceChange event,  price is missing, later price is added. In this case, we want to have only 1 event instead of 2
             if event not in unique_events:
                 unique_events.append(event)
         # Sort by event datetime using natural ordering

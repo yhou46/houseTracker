@@ -78,18 +78,19 @@ PropertyDataStreamErrorHandlerType = Callable[[PropertyDataStreamParsingError], 
 def empty_data_stream_error_handler(error: PropertyDataStreamParsingError) -> None:
    raise error
 
-def parse_scraped_at_timestamp(scraped_at_str: str) -> datetime:
+def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datetime:
     """
     Parse scrapedAt timestamp, ensuring it's timezone-aware and in UTC.
 
     Args:
-        scraped_at_str: ISO format timestamp string (with or without timezone info)
+        datetime_str: datetime string (with or without timezone info)
+        format: datetime string format; None means ISO format
 
     Returns:
         datetime object in UTC timezone
     """
     # Parse the timestamp (works for both timezone-aware and timezone-naive formats)
-    dt = datetime.fromisoformat(scraped_at_str)
+    dt: datetime = datetime.strptime(datetime_str, format) if format else datetime.fromisoformat(datetime_str)
 
     if dt.tzinfo is None:
         # Timezone-naive datetime - assume Pacific Time (UTC-8)
@@ -286,7 +287,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
         date_str = event.get('date')
         if not date_str or not isinstance(date_str, str):
             raise ValueError("Event date is missing or not a string")
-        date_obj = datetime.strptime(date_str, "%b %d, %Y")
+        date_obj = parse_datetime_as_utc(date_str, "%b %d, %Y")
 
         # Parse price
         price = event.get('price')
@@ -317,6 +318,8 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             event_type = PropertyHistoryEventType.ListedForRent
         elif description.lower().startswith("rental removed"):
             event_type = PropertyHistoryEventType.RentalRemoved
+        elif description.lower().startswith("listing removed"):
+            event_type = PropertyHistoryEventType.ListRemoved
         else:
             raise ValueError(f"Unknown event description: {description}")
 
@@ -504,7 +507,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
     ]
 
     # Parse last update time
-    last_updated = parse_scraped_at_timestamp(redfin_data.scrapedAt)
+    last_updated = parse_datetime_as_utc(redfin_data.scrapedAt, None)
 
     # Validate some logic
     if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
@@ -575,3 +578,4 @@ if __name__ == "__main__":
             if count % 100 == 0:
                 print(f"Processed {count} properties...")
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
+        reader.close()
