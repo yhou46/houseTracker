@@ -33,6 +33,12 @@ government site metadata
     pipenv install <package name> --dev
     ```
 
+# Prerequisite - before running any python files
+```shell
+cd houseTracker/python
+export PYTHONPATH="$(pwd):$PYTHONPATH"
+```
+
 # To run the script
 1. Use pipenv shell
     ```shell
@@ -57,6 +63,12 @@ government site metadata
 2. Run from repoRoot/python:
 ```shell
 pipenv run python ./shared/test/iproperty.test.py
+```
+
+# Compile test
+```shell
+# please do the prerequisite first
+mypy ./
 ```
 
 # Update python version in pipenv

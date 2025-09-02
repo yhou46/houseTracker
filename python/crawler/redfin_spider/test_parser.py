@@ -14,7 +14,7 @@ import json
 # Add the current directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from redfin_spider.redfin_parser import parse_property_page, parse_property_history, _parse_history_from_javascript
+from crawler.redfin_spider.redfin_parser import parse_property_page, parse_property_history, _parse_history_from_javascript
 
 def test_parser_with_saved_file():
     """Test the parser using a saved HTML file."""

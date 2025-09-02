@@ -29,7 +29,7 @@ class TestGetAddressHash(unittest.TestCase):
         for input_addr, expected_hash in test_addresses:
             print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")
             self.assertEqual(get_address_hash(input_addr), expected_hash)
-    
+
     def test_addresses_with_unit_information(self) -> None:
         test_addresses: List[Tuple[str, str]] = [
             ("655 Crockett St Unit A107,Seattle, WA 98109", "655-crockett-st|apt-a107|seattle|wa|98109"),
@@ -39,7 +39,7 @@ class TestGetAddressHash(unittest.TestCase):
         for input_addr, expected_hash in test_addresses:
             print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")
             self.assertEqual(get_address_hash(input_addr), expected_hash)
-    
+
     def test_vacant_land_address(self) -> None:
         test_addresses: List[Tuple[str, str]] = [
             ("1203 X Dave Road, Redmond, WA 98052", "1203-x-dave-rd|redmond|wa|98052"),
@@ -49,5 +49,20 @@ class TestGetAddressHash(unittest.TestCase):
             print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")
             self.assertEqual(get_address_hash(input_addr), expected_hash)
 
+    def test_addresses_with_special_marks(self) -> None:
+        test_addresses: List[Tuple[str, str]] = [
+            ("7988 170th Ave NE (Homesite #14),Redmond, WA 98052", "7988-170th-ave-ne|apt-14|redmond|wa|98052"),
+            ("11170 (HS #24) NE 134th Ct NE, Redmond, WA 98052", "11170-ne-134th-ct-ne|apt-24|redmond|wa|98052"),
+            ("13468 (HS #9) NE 112th Pl, Redmond, WA 98052", "13468-ne-112th-pl|apt-9|redmond|wa|98052"),
+            ("11162 (HS 23) 134th Ct NE, Redmond, WA 98052", "11162-134th-ct-ne|apt-23|redmond|wa|98052"),
+            ("13426 (HS 2) NE 112th Pl, Redmond, WA 98052", "13426-ne-112th-pl|apt-2|redmond|wa|98052"),
+            ("13472 (HS 8) NE 112th Pl, Redmond, WA 98052", "13472-ne-112th-pl|apt-8|redmond|wa|98052"),
+            ("13434 (HS 3) NE 112th Pl, Redmond, WA 98052", "13434-ne-112th-pl|apt-3|redmond|wa|98052")
+        ]
+        for input_addr, expected_hash in test_addresses:
+            print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")
+            self.assertEqual(get_address_hash(input_addr), expected_hash)
+
+
 if __name__ == "__main__":
-    unittest.main() 
+    unittest.main()

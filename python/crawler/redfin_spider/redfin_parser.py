@@ -6,7 +6,7 @@ property information. It can be used by both the spider and unit tests.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup
 import json
@@ -477,7 +477,7 @@ def parse_property_page(url: str, html_content: str, spider_name: str = "redfin_
     result = {
         'url': url,
         'redfinId': redfin_id,
-        'scrapedAt': datetime.now().isoformat(),
+        'scrapedAt': datetime.now(timezone.utc).isoformat(),
         'spiderName': spider_name,
         **property_details
     }
