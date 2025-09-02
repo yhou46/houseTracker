@@ -1,12 +1,13 @@
-from typing import Iterator, Callable, Any, Dict
+from typing import Iterator, Callable, Any, Dict, Tuple
 from enum import Enum
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import os
+from decimal import Decimal
 
 from crawler.redfin_spider.items import RedfinPropertyItem
-from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent
+from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
 
 from shared.iproperty_address import IPropertyAddress
 from shared.iproperty_address import InvalidAddressError
@@ -30,7 +31,7 @@ class RedfinPropertyEntry:
             numberOfBathrooms: float | None,
             yearBuilt: int | None,
             status: str,
-            price: float | None,
+            price: Decimal | None,
             readyToBuildTag: bool | None,
             ):
         self.url = url
@@ -77,16 +78,40 @@ PropertyDataStreamErrorHandlerType = Callable[[PropertyDataStreamParsingError], 
 def empty_data_stream_error_handler(error: PropertyDataStreamParsingError) -> None:
    raise error
 
-class IPropertyDataStream(Iterator[IProperty]):
+def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datetime:
+    """
+    Parse scrapedAt timestamp, ensuring it's timezone-aware and in UTC.
+
+    Args:
+        datetime_str: datetime string (with or without timezone info)
+        format: datetime string format; None means ISO format
+
+    Returns:
+        datetime object in UTC timezone
+    """
+    # Parse the timestamp (works for both timezone-aware and timezone-naive formats)
+    dt: datetime = datetime.strptime(datetime_str, format) if format else datetime.fromisoformat(datetime_str)
+
+    if dt.tzinfo is None:
+        # Timezone-naive datetime - assume Pacific Time (UTC-8)
+        pacific_tz = timezone(timedelta(hours=-8))
+        dt = dt.replace(tzinfo=pacific_tz)
+        return dt.astimezone(timezone.utc)
+    else:
+        # Already timezone-aware - convert to UTC if not already
+        return dt.astimezone(timezone.utc)
+
+type IPropertyDataStreamIteratorType = tuple[IPropertyMetadata, IPropertyHistory]
+class IPropertyDataStream(Iterator[IPropertyDataStreamIteratorType]):
 
     def __init__(self, error_handler: PropertyDataStreamErrorHandlerType):
         self._error_handler = error_handler
 
-    def __iter__(self) -> Iterator[IProperty]:
+    def __iter__(self) -> Iterator[IPropertyDataStreamIteratorType]:
         self.initialize()
         return self
 
-    def __next__(self) -> IProperty:
+    def __next__(self) -> IPropertyDataStreamIteratorType:
         entry = self.next_entry()
         if entry is None:
             self.close()
@@ -97,7 +122,7 @@ class IPropertyDataStream(Iterator[IProperty]):
     Should return None when there are no more entries.
     Raise exceptions for errors, which will be handled by the error handler.
     '''
-    def next_entry(self) -> IProperty | None:
+    def next_entry(self) -> IPropertyDataStreamIteratorType | None:
         raise NotImplementedError("This method should be overridden by subclasses")
 
     def initialize(self) -> None:
@@ -116,7 +141,7 @@ class RedfinFileDataReader(IPropertyDataStream):
         self._fileObject = open(self._file_path, 'r')
         # Initialize any other resources
 
-    def next_entry(self) -> IProperty | None:
+    def next_entry(self) -> IPropertyDataStreamIteratorType | None:
         try:
             line = self._fileObject.readline().strip()
             if not line:
@@ -249,11 +274,11 @@ def validate_redfin_property_entry(entry: RedfinPropertyEntry) -> None:
             error_data = entry.price
         )
 
-def parse_property_history(data: Dict[str, Any], property_id: str, address: IPropertyAddress) -> IPropertyHistory:
+def parse_property_history(data: Dict[str, Any], property_id: str, address: IPropertyAddress, last_updated: datetime) -> IPropertyHistory:
     if not isinstance(data, dict):
         raise ValueError("Data must be a dictionary")
     history_list = data.get('history', [])
-    property_history: IPropertyHistory = IPropertyHistory(property_id, address, [])
+    property_history: IPropertyHistory = IPropertyHistory(address, [], last_updated)
     for event in history_list:
         if not isinstance(event, dict):
             raise ValueError("Each history event must be a dictionary")
@@ -262,7 +287,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
         date_str = event.get('date')
         if not date_str or not isinstance(date_str, str):
             raise ValueError("Event date is missing or not a string")
-        date_obj = datetime.strptime(date_str, "%b %d, %Y")
+        date_obj = parse_datetime_as_utc(date_str, "%b %d, %Y")
 
         # Parse price
         price = event.get('price')
@@ -293,11 +318,13 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             event_type = PropertyHistoryEventType.ListedForRent
         elif description.lower().startswith("rental removed"):
             event_type = PropertyHistoryEventType.RentalRemoved
+        elif description.lower().startswith("listing removed"):
+            event_type = PropertyHistoryEventType.ListRemoved
         else:
             raise ValueError(f"Unknown event description: {description}")
 
         if event_type == PropertyHistoryEventType.PriceChange and price is None:
-            print(f"Warning: PriceChange event without price on {date_str} for property {property_id}, address {address.get_address_hash()}")
+            print(f"Warning: PriceChange event without price on {date_str} for property {property_id}, address {address.address_hash}")
 
         # Parse source and sourceId
         source = event.get('source')
@@ -328,7 +355,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
 
     return property_history
 
-def parse_json_str_to_property(line: str) -> IProperty | None:
+def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyHistory]:
     data = json.loads(line)
     redfin_data = RedfinPropertyEntry(
         url=data.get('url'),
@@ -399,7 +426,7 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
             error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
             error_data = redfin_data.area,
         )
-    area_number = float(area_parts[0])
+    area_number = Decimal(area_parts[0])
     if area_parts[1].lower() == "sqft":
         area_unit = AreaUnit.SquareFeet
     elif area_parts[1].lower() == "acres":
@@ -428,7 +455,7 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
                 error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
                 error_data = redfin_data.lotArea,
             )
-        lot_area_number = float(lot_area_parts[0])
+        lot_area_number = Decimal(lot_area_parts[0])
         normalized_unit = "".join(lot_area_parts[1:]).lower()
         if normalized_unit == "sqft" or normalized_unit == "squarefeet":
             lot_area_unit = AreaUnit.SquareFeet
@@ -447,8 +474,8 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         lot_area = PropertyArea(lot_area_number, lot_area_unit)
 
     # Parse number of bedrooms and bathrooms
-    number_of_bedrooms = float(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
-    number_of_bathrooms = float(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
+    number_of_bedrooms = Decimal(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
+    number_of_bathrooms = Decimal(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
     year_built = redfin_data.yearBuilt
 
     # Parse status
@@ -480,7 +507,7 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
     ]
 
     # Parse last update time
-    last_updated = datetime.fromisoformat(redfin_data.scrapedAt)
+    last_updated = parse_datetime_as_utc(redfin_data.scrapedAt, None)
 
     # Validate some logic
     if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
@@ -497,11 +524,16 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         )
 
     # Parse property history
-    history = parse_property_history(data, property_id, address)
+    history = parse_property_history(data, property_id, address, last_updated)
+
+    # Legacy data doesn't have price
+    if price is None and len(history.history) > 0:
+        # Set price to the last history event's price
+        price = history.history[-1].price
+
 
     # Create property object
-    property = IProperty(
-        id = property_id,
+    property_meta = IPropertyMetadata(
         address = address,
         area = area,
         property_type = property_type,
@@ -511,11 +543,10 @@ def parse_json_str_to_property(line: str) -> IProperty | None:
         year_built = year_built,
         status = status,
         price = price,
-        history = history,
+        last_updated = last_updated,
         data_sources = data_source,
-        last_updated = last_updated
     )
-    return property
+    return property_meta, history
 
 if __name__ == "__main__":
     # Get the directory of the current script (data_reader.py)
@@ -523,7 +554,7 @@ if __name__ == "__main__":
 
     # Go up two levels to the project root, then into redfin_output
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250805_184040.jsonl")
+    redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250821_201954.jsonl")
     print(redfin_output_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -540,9 +571,11 @@ if __name__ == "__main__":
         reader: IPropertyDataStream = RedfinFileDataReader(redfin_output_path, file_error_handler)
         count = 0
 
-        for property in reader:
+        for metadata, history in reader:
             count += 1
-            print(property)
+            print(metadata)
+            print(history)
             if count % 100 == 0:
                 print(f"Processed {count} properties...")
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
+        reader.close()

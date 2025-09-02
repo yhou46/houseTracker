@@ -3,7 +3,7 @@ import os
 from enum import Enum
 import requests
 from bs4 import BeautifulSoup
-import usaddress # type: ignore
+import usaddress # type: ignore[import-untyped]
 
 if __name__ == "__main__":
     timeNow = DatetimeLib.datetime.now(DatetimeLib.timezone.utc)
