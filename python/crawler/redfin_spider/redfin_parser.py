@@ -7,7 +7,7 @@ property information. It can be used by both the spider and unit tests.
 
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Set
 from bs4 import BeautifulSoup
 import json
 
@@ -42,32 +42,29 @@ def parse_meta_tag(beautiful_soup: BeautifulSoup ,name: str) -> Optional[str]:
     return None
 
 def parse_property_sublinks(html_content: str) -> List[str]:
-    # TODO: implement it
-    return []
-
-def parse_property_links(html_content: str) -> List[str]:
     """
-    Parse property links from a Redfin search results page using BeautifulSoup.
-
-    Args:
-        html_content: HTML content of the search results page
-
-    Returns:
-        List of property URLs (relative paths)
+    Parse property links using CSS selectors for hierarchical search.
+    Returns a list of property URLs (relative paths).
     """
+
     soup = BeautifulSoup(html_content, "html.parser")
-    links = set()
-    # Find all <a> tags with href containing '/home/' and matching the expected pattern
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        # Only collect links that match the property URL pattern
-        if (
-            href.startswith("/")
-            and "/home/" in href
-            and re.match(r"^/[A-Z]{2}/[^/]+/.+/home/\d+", href)
-        ):
-            links.add(href)
-    return list(links)
+    property_urls: Set[str] = set()
+    # property_urls: List[str] =[]
+
+    # Use CSS selector to find all <a> tags with href inside mapHomeCard divs
+    # within the DesktopBlueprintSearchPage container
+    css_selector = 'div[id="DesktopBlueprintSearchPage__pageContainer"] div[data-rf-test-name="mapHomeCard"] a[href]'
+
+    links = soup.select(css_selector)
+
+    for link in links:
+        href = link["href"]
+        if isinstance(href, str):
+            property_urls.add(href)
+        else:
+            raise ValueError(f"Unexpected href type: {type(href)}")
+
+    return list(property_urls)
 
 def parse_property_details(html_content: str) -> Dict[str, Any]:
     """

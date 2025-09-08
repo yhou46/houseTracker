@@ -2,8 +2,8 @@ import scrapy
 import os
 from datetime import datetime
 from ..items import RedfinPropertyItem
-from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP
-from ..redfin_parser import parse_property_page
+from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP, ENABLE_BROWSER_RENDERING
+from ..redfin_parser import parse_property_page, parse_property_sublinks
 
 
 class RedfinSpider(scrapy.Spider):
@@ -34,7 +34,11 @@ class RedfinSpider(scrapy.Spider):
         for url in self.start_urls:
             yield scrapy.Request(
                 url=url,
-                callback=self.parse_search_results
+                callback=self.parse_search_results,
+                meta={
+                    'original_url': url,
+                    'playwright': ENABLE_BROWSER_RENDERING,
+                    },
             )
 
     def parse_search_results(self, response):
@@ -54,7 +58,8 @@ class RedfinSpider(scrapy.Spider):
 
         # Extract property links from search results
         # Using the CSS selector for the property card links
-        property_links = response.css('a[data-rf-test-name="basicNode-homeCard"]::attr(href)').getall()
+        # property_links = response.css('a[data-rf-test-name="basicNode-homeCard"]::attr(href)').getall()
+        property_links = parse_property_sublinks(response.text)
 
         self.logger.info(f"Found {len(property_links)} property links")
 
@@ -139,41 +144,6 @@ class RedfinSpider(scrapy.Spider):
         self.logger.info(f"  - Area: {item.get('area')} sq ft")
 
         yield item
-
-    def _extract_property_details(self, response, item):
-        """
-        Extract property details from the key details section.
-
-        TODO: Implement logic to extract:
-        1. Bedrooms and bathrooms
-        2. Square footage
-        3. Property type
-        4. Lot size
-        5. Year built
-        6. Days on market
-        """
-        # TODO: Extract bedrooms
-        # beds_elem = response.css('...').get()
-
-        # TODO: Extract bathrooms
-        # baths_elem = response.css('...').get()
-
-        # TODO: Extract square footage
-        # sqft_elem = response.css('...').get()
-
-        # TODO: Extract property type
-        # property_type_elem = response.css('...').get()
-
-        # TODO: Extract lot size
-        # lot_size_elem = response.css('...').get()
-
-        # TODO: Extract year built
-        # year_built_elem = response.css('...').get()
-
-        # TODO: Extract days on market
-        # dom_elem = response.css('...').get()
-
-        pass
 
     def _save_html_response(self, response, page_type):
         """
