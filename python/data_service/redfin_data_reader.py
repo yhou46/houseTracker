@@ -9,11 +9,10 @@ from decimal import Decimal
 from crawler.redfin_spider.items import RedfinPropertyItem
 from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
 
-from shared.iproperty_address import IPropertyAddress
-from shared.iproperty_address import InvalidAddressError
+from shared.iproperty_address import IPropertyAddress, InvalidAddressError
 
 class RedfinPropertyEntryTypeCheck:
-    def __init__(self):
+    def __init__(self) -> None:
         for field in RedfinPropertyItem.fields:
             setattr(self, field, None)
 
@@ -48,7 +47,7 @@ class RedfinPropertyEntry:
         self.price = price
         self.readyToBuildTag = readyToBuildTag
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"RedfinPropertyEntry(url={self.url}, redfinId={self.redfinId}, scrapedAt={self.scrapedAt}, address={self.address}, area={self.area}, propertyType={self.propertyType}, lotArea={self.lotArea}, numberOfBedrooms={self.numberOfBedrooms}, numberOfBathrooms={self.numberOfBathrooms}, yearBuilt={self.yearBuilt}, status={self.status}, price={self.price}, readyToBuildTag={self.readyToBuildTag})"
 
 class PropertyDataStreamParsingErrorCode(Enum):
@@ -69,7 +68,7 @@ class PropertyDataStreamParsingError(Exception):
         self.error_code = error_code
         self.error_data = error_data
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.__class__.__name__}: message={self.args}, error_code={self.error_code}, original_data={self.original_data}"
 
 PropertyDataStreamErrorHandlerType = Callable[[PropertyDataStreamParsingError], None]
@@ -510,7 +509,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
     last_updated = parse_datetime_as_utc(redfin_data.scrapedAt, None)
 
     # Validate some logic
-    if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None):
+    if property_type != PropertyType.VacantLand and (number_of_bathrooms == None or number_of_bedrooms == None): # type: ignore[comparison-overlap]
         error_msg = f"Number of bedrooms and bathrooms must be provided for non-vacant land properties: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,

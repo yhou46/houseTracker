@@ -10,7 +10,7 @@ from itemadapter import ItemAdapter
 
 
 class RedfinSpiderPipeline:
-    def process_item(self, item, spider):
+    def process_item(self, item, spider): # type: ignore[no-untyped-def]
         return item
 
 
@@ -21,12 +21,12 @@ class JsonlPipeline:
     Each item is written as a single JSON line to the output file.
     """
 
-    def __init__(self):
-        self.output_file = None
-        self.output_dir = None
+    def __init__(self) -> None:
+        self.output_file: str | None = None
+        self.output_dir: str | None = None
 
     @classmethod
-    def from_crawler(cls, crawler):
+    def from_crawler(cls, crawler): # type: ignore[no-untyped-def]
         """
         Create pipeline instance from crawler settings.
         """
@@ -45,10 +45,13 @@ class JsonlPipeline:
 
         return pipeline
 
-    def open_spider(self, spider):
+    def open_spider(self, spider): # type: ignore[no-untyped-def]
         """
         Called when spider opens. Create output directory and file.
         """
+        if not self.output_dir or not self.output_file:
+            raise ValueError("Output directory or file not set in JsonlPipeline")
+
         # Create output directory if it doesn't exist
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -60,7 +63,7 @@ class JsonlPipeline:
 
         spider.logger.info(f"JSONL Pipeline: Output file opened at {self.filepath}")
 
-    def close_spider(self, spider):
+    def close_spider(self, spider): # type: ignore[no-untyped-def]
         """
         Called when spider closes. Close the output file.
         """
@@ -68,7 +71,7 @@ class JsonlPipeline:
             self.file.close()
             spider.logger.info(f"JSONL Pipeline: Output file closed. Total records written: {getattr(self, 'record_count', 0)}")
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider): # type: ignore[no-untyped-def]
         """
         Process each scraped item and write it to the JSONL file.
         """
