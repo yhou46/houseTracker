@@ -68,9 +68,22 @@ DOWNLOAD_DELAY = 2
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    "redfin_spider.middlewares.RedfinSpiderDownloaderMiddleware": 543,
-#}
+# DOWNLOADER_MIDDLEWARES = {
+#     "scrapy_playwright.middleware.PlaywrightMiddleware": 725,
+# }
+
+DOWNLOAD_HANDLERS = {
+    "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+    "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+}
+
+# Playwright-specific settings
+PLAYWRIGHT_LAUNCH_OPTIONS = {
+    "headless": True,  # Run browser in background (no visible window)
+    "timeout": 20 * 1000,  # 20 seconds timeout
+}
+
+PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 30000  # 30 seconds for page load
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
