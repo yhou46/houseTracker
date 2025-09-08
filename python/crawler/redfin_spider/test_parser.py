@@ -11,12 +11,14 @@ import requests
 from bs4 import BeautifulSoup
 import json
 
+from typing import Callable, Any
+
 # Add the current directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from crawler.redfin_spider.redfin_parser import parse_property_page, parse_property_history, _parse_history_from_javascript, parse_property_links
+from crawler.redfin_spider.redfin_parser import parse_property_page, parse_property_history, _parse_history_from_javascript, parse_property_sublinks
 
-def test_parser_with_saved_file(filename: str):
+def test_parser_with_saved_file(filename: str) -> None:
     """Test the parser using a saved HTML file."""
 
     # Use the most recent property page file
@@ -56,7 +58,7 @@ def test_parser_with_saved_file(filename: str):
         # for key, value in result.items():
         #     print(f"{key}: {value}")
 
-        links = parse_property_links(html_content)
+        links = parse_property_sublinks(html_content)
         print(f"Extracted {len(links)} property links:")
         for link in links:
             print(link)
@@ -67,7 +69,7 @@ def test_parser_with_saved_file(filename: str):
         import traceback
         traceback.print_exc()
 
-def test_parser_with_url(url: str):
+def test_parser_with_url(url: str, callback: Callable[[str], Any]) -> None:
     """
     Test the parser by fetching a page from URL and parsing it.
 
@@ -97,10 +99,7 @@ def test_parser_with_url(url: str):
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-            # Extract property ID from URL for filename
-            url_parts = url.split('/')
-            property_id = url_parts[-1] if url_parts else "unknown"
-            filename = f"property_page_{property_id}_{timestamp}.html"
+            filename = f"downloaded_html_{timestamp}.html"
             filepath = debug_dir / filename
 
             # Save the HTML content
@@ -109,29 +108,7 @@ def test_parser_with_url(url: str):
 
             print(f"✓ Page saved to: {filepath}")
 
-            # Test the parser
-            # result = parse_property_page(
-            #     url=url,
-            #     html_content=html_content,
-            #     spider_name="test_spider"
-            # )
-
-            # print("\nPARSED RESULT:")
-            # print("-" * 30)
-            # for key, value in result.items():
-            #     if key == 'history':
-            #         print(f"{key}: {len(value)} events")
-            #         # Print first few history events
-            #         for i, event in enumerate(value[:3]):
-            #             print(f"  Event {i+1}: {event}")
-            #         if len(value) > 3:
-            #             print(f"  ... and {len(value) - 3} more events")
-            #     else:
-            #         print(f"{key}: {value}")
-            links = parse_property_links(html_content)
-            print(f"Extracted {len(links)} property links:")
-            for link in links:
-                print(link)
+            callback(html_content)
 
         else:
             print(f"✗ Failed to fetch page: {response.status_code}")
@@ -143,8 +120,11 @@ def test_parser_with_url(url: str):
 
 if __name__ == "__main__":
     # Test with saved file
-    # filename = "zipcode_page_20250830.html"
+    filename = "playwright_test_output_20250906_203049.html"  # Replace with your saved file name
     # test_parser_with_saved_file(filename)
 
     # Test with live URL (uncomment to test)
-    test_parser_with_url("https://www.redfin.com/zipcode/98109")
+    def function_callback(html_str: str) -> None:
+        links = parse_property_sublinks(html_str)
+        print(f"Extracted {len(links)} property links:")
+    test_parser_with_url("https://www.redfin.com/zipcode/98109", function_callback)
