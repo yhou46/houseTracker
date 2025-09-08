@@ -14,11 +14,11 @@ ZIP_CODES: List[str] = [
 REDFIN_ZIP_URL_FORMAT = "https://www.redfin.com/zipcode/{zip_code}"
 
 CITY_URL_MAP: Dict[str, str] = {
-    # "WA/Redmond": "https://www.redfin.com/city/14913/WA/Redmond",
-    # "WA/Kirkland": "https://www.redfin.com/city/9148/WA/Kirkland",
-    # "WA/Kenmore": "https://www.redfin.com/city/8944/WA/Kenmore",
-    # "WA/Bothel": "https://www.redfin.com/city/29439/WA/Bothell",
-    # "WA/Lynnwood": "https://www.redfin.com/city/10421/WA/Lynnwood"
+    "WA/Redmond": "https://www.redfin.com/city/14913/WA/Redmond",
+    "WA/Kirkland": "https://www.redfin.com/city/9148/WA/Kirkland",
+    "WA/Kenmore": "https://www.redfin.com/city/8944/WA/Kenmore",
+    "WA/Bothel": "https://www.redfin.com/city/29439/WA/Bothell",
+    "WA/Lynnwood": "https://www.redfin.com/city/10421/WA/Lynnwood"
 }
 
 ENABLE_BROWSER_RENDERING: bool = False  # Enable Playwright for JavaScript rendering
