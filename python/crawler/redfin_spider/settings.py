@@ -99,7 +99,7 @@ ITEM_PIPELINES: Dict[str, int] = {
 
 # JSONL Pipeline settings
 JSONL_OUTPUT_DIR = "redfin_output"
-JSONL_OUTPUT_FILE = None  # type: ignore # Will use timestamp-based filename if None
+JSONL_OUTPUT_FILE = None # Will use timestamp-based filename if None
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html

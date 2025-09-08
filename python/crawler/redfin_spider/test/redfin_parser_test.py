@@ -1,6 +1,6 @@
 import unittest
 import os
-from datetime import datetime
+from typing import Dict, Any
 
 from crawler.redfin_spider.redfin_parser import (
     parse_property_page,
@@ -9,7 +9,7 @@ from crawler.redfin_spider.redfin_parser import (
 from crawler.redfin_spider.test.test_utils import get_html_content_from_url
 
 class TestRedfinParser_ParsePageLinks(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         # Set up any required objects or state before each test
         self.test_sample_dir = os.path.join(os.path.dirname(__file__), "test_samples")
 
@@ -23,7 +23,7 @@ class TestRedfinParser_ParsePageLinks(unittest.TestCase):
             raise FileNotFoundError(f"Test sample file not found: {self.zip_code_page_local_path}")
 
 
-    def test_find_property_page_links_from_local_file(self):
+    def test_find_property_page_links_from_local_file(self) -> None:
         # Expected results
         expected_link_count = 41
 
@@ -43,7 +43,7 @@ class TestRedfinParser_ParsePageLinks(unittest.TestCase):
             f"One or more links do not match expected format, local file: {self.zip_code_page_local_path}"
         )
 
-    def test_find_property_page_links_from_url(self):
+    def test_find_property_page_links_from_url(self) -> None:
         # Expected results
         expected_min_link_count = 10
 
@@ -66,7 +66,7 @@ class TestRedfinParser_ParsePageLinks(unittest.TestCase):
         )
 
 class TestRedfinParser_ParsePropertyPage(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         # Set up any required objects or state before each test
         self.test_sample_dir = os.path.join(os.path.dirname(__file__), "test_samples")
 
@@ -79,7 +79,7 @@ class TestRedfinParser_ParsePropertyPage(unittest.TestCase):
         else:
             raise FileNotFoundError(f"Test sample file not found: {self.property_page_local_path}")
 
-    def _validate_property_data(self, property_data: dict):
+    def _validate_property_data(self, property_data: Dict[str, Any]) -> None:
         # Validate property data
         self.assertEqual(property_data.get("url"), self.property_page_url)
         self.assertEqual(property_data.get("redfinId"), "282664")
@@ -97,14 +97,14 @@ class TestRedfinParser_ParsePropertyPage(unittest.TestCase):
         # Validate property history
         self.assertEqual(property_data.get("historyCount"), 17)
 
-    def test_parse_property_page_from_local_file(self):
+    def test_parse_property_page_from_local_file(self) -> None:
         # Parse property page
         property_data = parse_property_page(self.property_page_url, self.property_page_local_html)
 
         self._validate_property_data(property_data)
 
 
-    def test_parse_property_page_from_url(self):
+    def test_parse_property_page_from_url(self) -> None:
         # Fetch HTML content from URL
         property_html = get_html_content_from_url(self.property_page_url)
         self.assertIsNotNone(property_html, f"Failed to fetch HTML content from URL: {self.property_page_url}")
