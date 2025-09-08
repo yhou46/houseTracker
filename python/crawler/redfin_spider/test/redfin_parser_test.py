@@ -79,13 +79,42 @@ class TestRedfinParser_ParsePropertyPage(unittest.TestCase):
         else:
             raise FileNotFoundError(f"Test sample file not found: {self.property_page_local_path}")
 
+    def _validate_property_data(self, property_data: dict):
+        # Validate property data
+        self.assertEqual(property_data.get("url"), self.property_page_url)
+        self.assertEqual(property_data.get("redfinId"), "282664")
+        self.assertEqual(property_data.get("address"), "7718 NE 183rd St, Kenmore, WA 98028")
+        self.assertEqual(property_data.get("area"), "2000.0 sqft")
+        self.assertEqual(property_data.get("propertyType"), "Single-family")
+        self.assertEqual(property_data.get("lotArea"), "2.15 acres")
+        self.assertEqual(property_data.get("numberOfBedroom"), 3.0)
+        self.assertEqual(property_data.get("numberOfBathroom"), 3.0)
+        self.assertEqual(property_data.get("yearBuilt"), 1996)
+        self.assertEqual(property_data.get("status"), "Sold")
+        self.assertEqual(property_data.get("price"), None)
+        self.assertEqual(property_data.get("readyToBuildTag"), False)
+
+        # Validate property history
+        self.assertEqual(property_data.get("historyCount"), 17)
+
     def test_parse_property_page_from_local_file(self):
-        pass
+        # Parse property page
+        property_data = parse_property_page(self.property_page_url, self.property_page_local_html)
+
+        self._validate_property_data(property_data)
+
 
     def test_parse_property_page_from_url(self):
-        property_data = parse_property_page(self.property_page_url, self.property_page_local_html)
-        self.assertEqual(property_data.get("url"), self.property_page_url)
-        self.assertEqual(property_data.get("redfin_id"), "282664")
+        # Fetch HTML content from URL
+        property_html = get_html_content_from_url(self.property_page_url)
+        self.assertIsNotNone(property_html, f"Failed to fetch HTML content from URL: {self.property_page_url}")
+
+        # Parse property page
+        property_data = parse_property_page(self.property_page_url, property_html)
+
+        # Validate property data
+        self._validate_property_data(property_data)
+
 
 
 if __name__ == '__main__':
