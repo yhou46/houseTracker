@@ -12,7 +12,6 @@ def get_html_content_from_url(url: str, save_to_filepath: str | None = None) -> 
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
-            print("✓ Page fetched successfully!")
             html_content = response.text
 
             if save_to_filepath:
