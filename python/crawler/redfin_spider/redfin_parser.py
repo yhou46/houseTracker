@@ -49,7 +49,6 @@ def parse_property_sublinks(html_content: str) -> List[str]:
 
     soup = BeautifulSoup(html_content, "html.parser")
     property_urls: Set[str] = set()
-    # property_urls: List[str] =[]
 
     # Use CSS selector to find all <a> tags with href inside mapHomeCard divs
     # within the DesktopBlueprintSearchPage container

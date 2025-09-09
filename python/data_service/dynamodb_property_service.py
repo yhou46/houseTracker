@@ -222,53 +222,12 @@ def convert_property_metadata_to_dynamodb_items(metadata: IPropertyMetadata, pro
     ]
     return metadata_item
 
-"""
-Convert IProperty object to a DynamoDB item format.
-NOTE: DynamoDB does not support float but only Decimal.
-"""
 def convert_property_to_dynamodb_items(property: IProperty) -> List[Dict[str, Any]]:
-    # property_item: Dict[str, Any] = dict()
+    """
+    Convert IProperty object to a DynamoDB item format.
+    NOTE: DynamoDB does not support float but only Decimal.
+    """
 
-    # # Set up partition key and sort key
-    # property_item[DynamoDbPropertyTableAttributeName.PK.value] = get_pk_from_entity(property.id, DynamoDbPropertyTableEntityType.Property)
-    # property_item[DynamoDbPropertyTableAttributeName.SK.value] = get_sk_from_entity(property.id, DynamoDbPropertyTableEntityType.Property, property.last_updated)
-
-    # # Set up global secondary indexes
-    # # Check table creation for attribute details
-    # property_item[DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value] = get_address_property_type_index(property.address.state, property.address.zip_code, property.address.city, property.property_type)
-    # property_item[DynamoDbPropertyTableAttributeName.AddressHash.value] = property.address.address_hash
-    # property_item[DynamoDbPropertyTableAttributeName.Status.value] = property.status.value
-
-    # # Other property entities
-    # property_item[DynamoDbPropertyTableAttributeName.Id.value] = property.id
-    # property_item[DynamoDbPropertyTableAttributeName.Address.value] = {
-    #     DynamoDbPropertyTableAttributeName.Address_StreetName.value: property.address.street_name,
-    #     DynamoDbPropertyTableAttributeName.Address_Unit.value: property.address.unit,
-    #     DynamoDbPropertyTableAttributeName.Address_City.value: property.address.city,
-    #     DynamoDbPropertyTableAttributeName.Address_State.value: property.address.state,
-    #     DynamoDbPropertyTableAttributeName.Address_ZipCode.value: property.address.zip_code
-    # }
-    # property_item[DynamoDbPropertyTableAttributeName.Area.value] = {
-    #     DynamoDbPropertyTableAttributeName.Area_Value.value: Decimal(property.area.value),
-    #     DynamoDbPropertyTableAttributeName.Area_Unit.value: property.area.unit.value
-    # } if property.area else None
-    # property_item[DynamoDbPropertyTableAttributeName.PropertyType.value] = property.property_type.value
-    # property_item[DynamoDbPropertyTableAttributeName.LotArea.value] = {
-    #     DynamoDbPropertyTableAttributeName.LotArea_Value.value: Decimal(property.lot_area.value),
-    #     DynamoDbPropertyTableAttributeName.LotArea_Unit.value: property.lot_area.unit.value
-    # } if property.lot_area else None
-    # property_item[DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value] = Decimal(property.number_of_bedrooms) if property.number_of_bedrooms is not None else None
-    # property_item[DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value] = Decimal(property.number_of_bathrooms) if property.number_of_bathrooms is not None else None
-    # property_item[DynamoDbPropertyTableAttributeName.YearBuilt.value] = property.year_built
-    # property_item[DynamoDbPropertyTableAttributeName.Price.value] = Decimal(property.price) if property.price is not None else None
-    # property_item[DynamoDbPropertyTableAttributeName.LastUpdated.value] = property.last_updated.isoformat()
-    # property_item[DynamoDbPropertyTableAttributeName.DataSources.value] = [
-    #     {
-    #         DynamoDbPropertyTableAttributeName.DataSource_SourceId.value: ds.source_id,
-    #         DynamoDbPropertyTableAttributeName.DataSource_SourceUrl.value: ds.source_url,
-    #         DynamoDbPropertyTableAttributeName.DataSource_SourceName.value: ds.source_name
-    #     } for ds in property.data_sources
-    # ]
     property_item = convert_property_metadata_to_dynamodb_items(property.metadata, property.id)
     # Convert history
     history_items = convert_property_history_to_dynamodb_item(property.id, property._history)
