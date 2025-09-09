@@ -22,7 +22,6 @@ from shared.iproperty import (
     PropertyType,
     IPropertyHistory,
     IPropertyHistoryEvent,
-    IPropertyAddress,
     PropertyArea,
     AreaUnit,
     PropertyStatus,
@@ -30,6 +29,8 @@ from shared.iproperty import (
     IPropertyMetadata,
     PropertyHistoryEventType,
 )
+
+from shared.iproperty_address import IPropertyAddress
 
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
@@ -176,54 +177,58 @@ def convert_property_history_to_dynamodb_item(property_id: str, history: IProper
         items.append(item)
     return items
 
-"""
-Convert IProperty object to a DynamoDB item format.
-NOTE: DynamoDB does not support float but only Decimal.
-"""
-def convert_property_to_dynamodb_items(property: IProperty) -> List[Dict[str, Any]]:
-    property_item: Dict[str, Any] = dict()
+def convert_property_metadata_to_dynamodb_items(metadata: IPropertyMetadata, property_id: str) -> Dict[str, Any]:
+    metadata_item: Dict[str, Any] = dict()
 
     # Set up partition key and sort key
-    property_item[DynamoDbPropertyTableAttributeName.PK.value] = get_pk_from_entity(property.id, DynamoDbPropertyTableEntityType.Property)
-    property_item[DynamoDbPropertyTableAttributeName.SK.value] = get_sk_from_entity(property.id, DynamoDbPropertyTableEntityType.Property, property.last_updated)
+    metadata_item[DynamoDbPropertyTableAttributeName.PK.value] = get_pk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property)
+    metadata_item[DynamoDbPropertyTableAttributeName.SK.value] = get_sk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property, metadata.last_updated)
 
     # Set up global secondary indexes
     # Check table creation for attribute details
-    property_item[DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value] = get_address_property_type_index(property.address.state, property.address.zip_code, property.address.city, property.property_type)
-    property_item[DynamoDbPropertyTableAttributeName.AddressHash.value] = property.address.address_hash
-    property_item[DynamoDbPropertyTableAttributeName.Status.value] = property.status.value
+    metadata_item[DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value] = get_address_property_type_index(metadata.address.state, metadata.address.zip_code, metadata.address.city, metadata.property_type)
+    metadata_item[DynamoDbPropertyTableAttributeName.AddressHash.value] = metadata.address.address_hash
+    metadata_item[DynamoDbPropertyTableAttributeName.Status.value] = metadata.status.value
 
     # Other property entities
-    property_item[DynamoDbPropertyTableAttributeName.Id.value] = property.id
-    property_item[DynamoDbPropertyTableAttributeName.Address.value] = {
-        DynamoDbPropertyTableAttributeName.Address_StreetName.value: property.address.street_name,
-        DynamoDbPropertyTableAttributeName.Address_Unit.value: property.address.unit,
-        DynamoDbPropertyTableAttributeName.Address_City.value: property.address.city,
-        DynamoDbPropertyTableAttributeName.Address_State.value: property.address.state,
-        DynamoDbPropertyTableAttributeName.Address_ZipCode.value: property.address.zip_code
+    metadata_item[DynamoDbPropertyTableAttributeName.Id.value] = property_id
+    metadata_item[DynamoDbPropertyTableAttributeName.Address.value] = {
+        DynamoDbPropertyTableAttributeName.Address_StreetName.value: metadata.address.street_name,
+        DynamoDbPropertyTableAttributeName.Address_Unit.value: metadata.address.unit,
+        DynamoDbPropertyTableAttributeName.Address_City.value: metadata.address.city,
+        DynamoDbPropertyTableAttributeName.Address_State.value: metadata.address.state,
+        DynamoDbPropertyTableAttributeName.Address_ZipCode.value: metadata.address.zip_code
     }
-    property_item[DynamoDbPropertyTableAttributeName.Area.value] = {
-        DynamoDbPropertyTableAttributeName.Area_Value.value: Decimal(property.area.value),
-        DynamoDbPropertyTableAttributeName.Area_Unit.value: property.area.unit.value
-    } if property.area else None
-    property_item[DynamoDbPropertyTableAttributeName.PropertyType.value] = property.property_type.value
-    property_item[DynamoDbPropertyTableAttributeName.LotArea.value] = {
-        DynamoDbPropertyTableAttributeName.LotArea_Value.value: Decimal(property.lot_area.value),
-        DynamoDbPropertyTableAttributeName.LotArea_Unit.value: property.lot_area.unit.value
-    } if property.lot_area else None
-    property_item[DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value] = Decimal(property.number_of_bedrooms) if property.number_of_bedrooms is not None else None
-    property_item[DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value] = Decimal(property.number_of_bathrooms) if property.number_of_bathrooms is not None else None
-    property_item[DynamoDbPropertyTableAttributeName.YearBuilt.value] = property.year_built
-    property_item[DynamoDbPropertyTableAttributeName.Price.value] = Decimal(property.price) if property.price is not None else None
-    property_item[DynamoDbPropertyTableAttributeName.LastUpdated.value] = property.last_updated.isoformat()
-    property_item[DynamoDbPropertyTableAttributeName.DataSources.value] = [
+    metadata_item[DynamoDbPropertyTableAttributeName.Area.value] = {
+        DynamoDbPropertyTableAttributeName.Area_Value.value: Decimal(metadata.area.value),
+        DynamoDbPropertyTableAttributeName.Area_Unit.value: metadata.area.unit.value
+    } if metadata.area else None
+    metadata_item[DynamoDbPropertyTableAttributeName.PropertyType.value] = metadata.property_type.value
+    metadata_item[DynamoDbPropertyTableAttributeName.LotArea.value] = {
+        DynamoDbPropertyTableAttributeName.LotArea_Value.value: Decimal(metadata.lot_area.value),
+        DynamoDbPropertyTableAttributeName.LotArea_Unit.value: metadata.lot_area.unit.value
+    } if metadata.lot_area else None
+    metadata_item[DynamoDbPropertyTableAttributeName.NumberOfBedrooms.value] = Decimal(metadata.number_of_bedrooms) if metadata.number_of_bedrooms is not None else None
+    metadata_item[DynamoDbPropertyTableAttributeName.NumberOfBathrooms.value] = Decimal(metadata.number_of_bathrooms) if metadata.number_of_bathrooms is not None else None
+    metadata_item[DynamoDbPropertyTableAttributeName.YearBuilt.value] = metadata.year_built
+    metadata_item[DynamoDbPropertyTableAttributeName.Price.value] = Decimal(metadata.price) if metadata.price is not None else None
+    metadata_item[DynamoDbPropertyTableAttributeName.LastUpdated.value] = metadata.last_updated.isoformat()
+    metadata_item[DynamoDbPropertyTableAttributeName.DataSources.value] = [
         {
             DynamoDbPropertyTableAttributeName.DataSource_SourceId.value: ds.source_id,
             DynamoDbPropertyTableAttributeName.DataSource_SourceUrl.value: ds.source_url,
             DynamoDbPropertyTableAttributeName.DataSource_SourceName.value: ds.source_name
-        } for ds in property.data_sources
+        } for ds in metadata.data_sources
     ]
+    return metadata_item
 
+def convert_property_to_dynamodb_items(property: IProperty) -> List[Dict[str, Any]]:
+    """
+    Convert IProperty object to a DynamoDB item format.
+    NOTE: DynamoDB does not support float but only Decimal.
+    """
+
+    property_item = convert_property_metadata_to_dynamodb_items(property.metadata, property.id)
     # Convert history
     history_items = convert_property_history_to_dynamodb_item(property.id, property._history)
 
@@ -401,7 +406,7 @@ def create_dynambodb_table_for_property(
         table_name: str,
         region_name: str,
         billing_mode: Literal['PAY_PER_REQUEST', 'PROVISIONED'],
-        ):
+        ) -> None:
     dynamodb_resource = boto3.resource('dynamodb', region_name=region_name)
     dynamodb_client = boto3.client('dynamodb', region_name=region_name)
 
@@ -587,16 +592,36 @@ class DynamoDBServiceForProperty:
             None
         """
         # Check if the property already exists
-        # TODO: here property id have conflict between old and new property if old property exists
+        # TODO: here property metadata will have duplicates since the last updated value is different and it is part of SK; need to remove duplicates
         existing_property = self.get_property_by_address(property_metadata.address)
         new_property = None
         if existing_property:
             self.logger.info(f"Property with ID {existing_property.id} already exists. Updating the property.")
 
+            # Update DB record
+            # TODO: need to remove duplicate metadata in DB
+            self._update_property_metadata(
+                existing_metadata=existing_property.metadata,
+                new_metadata=property_metadata,
+                property_id=existing_property.id,
+            )
+            self._updateproperty_history(
+                existing_history=existing_property.history,
+                new_history=property_history,
+                property_id=existing_property.id,
+            )
+
             # Merge the existing property with the new one
             existing_property.update_metadata(property_metadata)
             existing_property.update_history(property_history)
+            new_property = self.get_property_by_id(existing_property.id)
+            if new_property == None:
+                raise ValueError(f"new property should not be none, query id: {existing_property.id}")
+            if new_property != existing_property:
+                IProperty.compare_print_diff(new_property, existing_property)
+                raise ValueError(f"db record is not same as record in memory after DB update")
             new_property = existing_property
+
         else:
             self.logger.info(f"Property does not exist in DB. Will create new record")
             new_property = IProperty(
@@ -607,17 +632,11 @@ class DynamoDBServiceForProperty:
             self.logger.info(f"Generating property id: {new_property.id}")
             self.logger.info(f"New property info:\n{new_property}\n")
 
-        self.logger.info(f"Saving property with ID {new_property.id}, address hash: {new_property.address.address_hash} to DynamoDB.")
-        self._write_property(new_property)
+            self.logger.info(f"Saving property with ID {new_property.id}, address hash: {new_property.address.address_hash} to DynamoDB.")
+            self._write_property(new_property)
         return new_property
 
-    def _write_property(self, property: IProperty):
-        """
-        Write property data to DynamoDB table.
-        It will overwrite any existing data for the property.
-        """
-        items = convert_property_to_dynamodb_items(property)
-        print(f"Number of items to save: {len(items)}")
+    def _write_items(self, items: List[Dict[str, Any]]) -> None:
         try:
             with self.table.batch_writer() as writer:
                 for item in items:
@@ -631,7 +650,74 @@ class DynamoDBServiceForProperty:
             )
             raise err
 
-    def delete_property_by_id(self, property_id: str):
+    def _write_property(self, property: IProperty) -> None:
+        """
+        Write property data to DynamoDB table.
+        It will overwrite any existing data for the property.
+        """
+        items = convert_property_to_dynamodb_items(property)
+        print(f"Number of items to save: {len(items)}")
+        self._write_items(items)
+
+    def _update_property_metadata(
+            self,
+            existing_metadata: IPropertyMetadata,
+            new_metadata: IPropertyMetadata,
+            property_id: str,
+            ) -> None:
+        """
+        Update property metadata by removing existing metadata and add metadata
+        """
+        if (existing_metadata == new_metadata):
+            self.logger.info("metadata is same, skip the update")
+
+        # Need to remove old metadata and add new metadata since the usually the SK is different
+        items_to_be_removed = convert_property_metadata_to_dynamodb_items(existing_metadata, property_id)
+        items_to_be_added = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
+
+        # Check if 2 items have same key in dynamodb
+        def is_same_key(item1: Dict[str, Any], item2: Dict[str, Any]) -> bool:
+            pk1: str = item1.get(DynamoDbPropertyTableAttributeName.PK.value, "")
+            pk2: str = item2.get(DynamoDbPropertyTableAttributeName.PK.value, "")
+            sk1: str = item1.get(DynamoDbPropertyTableAttributeName.SK.value, "")
+            sk2: str = item2.get(DynamoDbPropertyTableAttributeName.SK.value, "")
+            return pk1 == pk2 and sk1 == sk2
+
+        try:
+            with self.table.batch_writer() as writer:
+                # Remove old metadata
+                if not is_same_key(items_to_be_removed, items_to_be_added):
+                    writer.delete_item(Key = {
+                        'PK': items_to_be_removed[DynamoDbPropertyTableAttributeName.PK.value],
+                        'SK': items_to_be_removed[DynamoDbPropertyTableAttributeName.SK.value],
+                    })
+                # Create new metadata
+                writer.put_item(items_to_be_added)
+        except ClientError as err:
+            self.logger.error(
+                "Couldn't load data into table %s. Here's why: %s: %s",
+                self.table.name,
+                err.response["Error"]["Code"],
+                err.response["Error"]["Message"],
+            )
+            raise err
+
+    def _updateproperty_history(
+            self,
+            existing_history: IPropertyHistory,
+            new_history: IPropertyHistory,
+            property_id: str,
+            ) -> None:
+
+        merged_history = IPropertyHistory.merge_history(existing_history, new_history)
+
+        new_items = []
+        for event in new_history.history:
+            if event not in merged_history.history:
+                new_items.append(convert_property_history_event_to_dynamodb_item(property_id, event))
+        self._write_items(new_items)
+
+    def delete_property_by_id(self, property_id: str) -> None:
         """
         Delete a property by its ID from the DynamoDB table.
 
@@ -655,11 +741,11 @@ class DynamoDBServiceForProperty:
             self.logger.error(f"Error deleting property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
 
-    def close(self):
+    def close(self) -> None:
         if self.dynamodb_client:
             self.dynamodb_client.close()
 
-def run_save_test(table_name: str, region: str):
+def run_save_test(table_name: str, region: str) -> None:
     # Load IProperty
     # Get the directory of the current script (data_reader.py)
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -704,7 +790,7 @@ def run_save_test(table_name: str, region: str):
         dynamoDbService.get_property_by_id(new_property.id)
         print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
 
-def run_read_test(table_name: str, region: str, property_id: str):
+def run_read_test(table_name: str, region: str, property_id: str) -> None:
     """
     Run a read test to retrieve a property by its ID from DynamoDB.
 
@@ -720,7 +806,7 @@ def run_read_test(table_name: str, region: str, property_id: str):
     else:
         print(f"Property with ID {property_id} not found")
 
-def store_property_from_file(filename: str, table_name: str, region: str):
+def store_property_from_file(filename: str, table_name: str, region: str) -> None:
     """
     Store properties from a file into DynamoDB.
 
@@ -804,7 +890,7 @@ if __name__ == "__main__":
     #     print(f"Property with address {property_id} not found")
 
     # Query by address
-    address_str = "19833 95th Ave NE, Bothell, WA 98011"
+    address_str = "7988 170th Ave NE (Homesite #14), Redmond, WA 98052"
     address_obj = IPropertyAddress(address_str)
     dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
     property_obj = dynamoDbService.get_property_by_address(address_obj)

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import List
 import math
 from decimal import Decimal
+from typing import Any
 
 import uuid
 import logging
@@ -93,7 +94,7 @@ class IPropertyHistoryEvent:
         return self._source_id
 
     def __str__(self) -> str:
-        return f"Date: {self.datetime.strftime('%Y-%m-%d')}, Event: {self.event_type.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}, Source: {self.source if self.source else 'N/A'}, Source ID: {self.source_id if self.source_id else 'N/A'}, id: {self.id}"
+        return f"Date: {self.datetime.isoformat()}, Event: {self.event_type.value}, Description: {self.description}, Price: {self.price if self.price is not None else 'N/A'}, Source: {self.source if self.source else 'N/A'}, Source ID: {self.source_id if self.source_id else 'N/A'}, id: {self.id}"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, IPropertyHistoryEvent):
@@ -229,7 +230,7 @@ class IPropertyHistory:
         history_str = "\n".join(str(event) for event in self._history)
         return f"Address: {self._address.address_hash},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.isoformat()}"
 
-    def __eq__(self, value) -> bool:
+    def __eq__(self, value: Any) -> bool:
         if not isinstance(value, IPropertyHistory):
             return False
 
@@ -429,15 +430,16 @@ class IProperty():
     def history(self) -> IPropertyHistory:
         return self._history
 
-    def update_metadata(self, new_metadata: IPropertyMetadata):
+    def update_metadata(self, new_metadata: IPropertyMetadata) -> None:
         if self._metadata.last_updated < new_metadata.last_updated:
             self._metadata = new_metadata
 
-    def update_history(self, new_history: IPropertyHistory):
+    def update_history(self, new_history: IPropertyHistory) -> None:
         self._history = IPropertyHistory.merge_history(self._history, new_history)
 
     def __str__(self) -> str:
         return (
+            f"id: {self.id}\n" +
             self._metadata.__str__() +
             f"\nHistory:\n{self._history.__str__()}"
         )
@@ -453,7 +455,7 @@ class IProperty():
         return str(uuid.uuid4())
 
     @staticmethod
-    def compare_print_diff(property1: "IProperty", property2: "IProperty"):
+    def compare_print_diff(property1: "IProperty", property2: "IProperty") -> None:
         """
         Compare two IProperty objects and print differences in their fields.
 
