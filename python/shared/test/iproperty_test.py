@@ -269,7 +269,7 @@ class Test_IPropertyHistoryEvent(unittest.TestCase):
 
 class Test_IPropertyHistory(unittest.TestCase):
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures before each test method."""
         super().setUp()
         self.test_last_updated = datetime.now(timezone.utc)

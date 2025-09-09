@@ -1,9 +1,13 @@
-import scrapy
 import os
 from datetime import datetime
+from typing import Any
+
+import scrapy
+from scrapy.http import Response, Request
+
 from ..items import RedfinPropertyItem
-from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP
-from ..redfin_parser import parse_property_page
+from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP, ENABLE_BROWSER_RENDERING
+from ..redfin_parser import parse_property_page, parse_property_sublinks
 
 
 class RedfinSpider(scrapy.Spider):
@@ -16,7 +20,7 @@ class RedfinSpider(scrapy.Spider):
     name = 'redfin_spider'
     allowed_domains = ['redfin.com']
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super(RedfinSpider, self).__init__(*args, **kwargs)
         # Generate start URLs from config
         zip_code_urls = [
@@ -29,15 +33,19 @@ class RedfinSpider(scrapy.Spider):
         self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')
         os.makedirs(self.debug_dir, exist_ok=True)
 
-    async def start(self):
+    async def start(self): # type: ignore[no-untyped-def]
         """Generate initial requests to start the crawling process."""
         for url in self.start_urls:
             yield scrapy.Request(
                 url=url,
-                callback=self.parse_search_results
+                callback=self.parse_search_results, # type: ignore[arg-type]
+                meta={
+                    'original_url': url,
+                    'playwright': ENABLE_BROWSER_RENDERING,
+                    },
             )
 
-    def parse_search_results(self, response):
+    def parse_search_results(self, response: Response): # type: ignore[no-untyped-def]
         """
         Parse the search results page to extract property URLs.
 
@@ -54,7 +62,8 @@ class RedfinSpider(scrapy.Spider):
 
         # Extract property links from search results
         # Using the CSS selector for the property card links
-        property_links = response.css('a[data-rf-test-name="basicNode-homeCard"]::attr(href)').getall()
+        # property_links = response.css('a[data-rf-test-name="basicNode-homeCard"]::attr(href)').getall()
+        property_links = parse_property_sublinks(response.text)
 
         self.logger.info(f"Found {len(property_links)} property links")
 
@@ -68,7 +77,7 @@ class RedfinSpider(scrapy.Spider):
                 # Follow the property link to parse individual property page
                 yield scrapy.Request(
                     url=full_url,
-                    callback=self.parse_property_page,
+                    callback=self.parse_property_page, # type: ignore[arg-type]
                     meta={'original_url': full_url}
                 )
             else:
@@ -105,14 +114,14 @@ class RedfinSpider(scrapy.Spider):
                 self.logger.info(f"Following next page: {next_url}")
                 yield scrapy.Request(
                     url=next_url,
-                    callback=self.parse_search_results
+                    callback=self.parse_search_results, # type: ignore[arg-type]
                 )
             else:
                 self.logger.info(f"No next page found - current page {current_page} is the last page")
         else:
             self.logger.info("No pagination links found - single page results")
 
-    def parse_property_page(self, response):
+    def parse_property_page(self, response: Response): # type: ignore[no-untyped-def]
         """
         Parse individual property page to extract detailed information.
         """
@@ -140,42 +149,7 @@ class RedfinSpider(scrapy.Spider):
 
         yield item
 
-    def _extract_property_details(self, response, item):
-        """
-        Extract property details from the key details section.
-
-        TODO: Implement logic to extract:
-        1. Bedrooms and bathrooms
-        2. Square footage
-        3. Property type
-        4. Lot size
-        5. Year built
-        6. Days on market
-        """
-        # TODO: Extract bedrooms
-        # beds_elem = response.css('...').get()
-
-        # TODO: Extract bathrooms
-        # baths_elem = response.css('...').get()
-
-        # TODO: Extract square footage
-        # sqft_elem = response.css('...').get()
-
-        # TODO: Extract property type
-        # property_type_elem = response.css('...').get()
-
-        # TODO: Extract lot size
-        # lot_size_elem = response.css('...').get()
-
-        # TODO: Extract year built
-        # year_built_elem = response.css('...').get()
-
-        # TODO: Extract days on market
-        # dom_elem = response.css('...').get()
-
-        pass
-
-    def _save_html_response(self, response, page_type):
+    def _save_html_response(self, response, page_type): # type: ignore
         """
         Save HTML response to a file for debugging purposes.
 
@@ -197,6 +171,6 @@ class RedfinSpider(scrapy.Spider):
         except Exception as e:
             self.logger.error(f"Failed to save HTML response: {e}")
 
-    def closed(self, reason):
+    def closed(self, reason): # type: ignore
         """Called when the spider is closed."""
         self.logger.info(f"Spider {self.name} closed: {reason}")
