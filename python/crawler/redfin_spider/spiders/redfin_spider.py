@@ -55,14 +55,8 @@ class RedfinSpider(scrapy.Spider):
         3. Handles pagination
         """
         self.logger.info(f"Parsing search results from: {response.url}")
-        # TODO: page link pattern changed in redfin
-
-        # Save HTML response for debugging
-        # self._save_html_response(response, "search_results")
 
         # Extract property links from search results
-        # Using the CSS selector for the property card links
-        # property_links = response.css('a[data-rf-test-name="basicNode-homeCard"]::attr(href)').getall()
         property_links = parse_property_sublinks(response.text)
 
         self.logger.info(f"Found {len(property_links)} property links")
