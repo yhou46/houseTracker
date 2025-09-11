@@ -108,8 +108,15 @@ class DynamoDbPropertyTableGlobalSecondaryIndexName(Enum):
 def get_pk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType) -> str:
     return f"{entity_type.value}#{entity_id}"
 
-def get_sk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType, time_in_utc: datetime) -> str:
-    return f"{entity_type.value}#{entity_id}#{time_in_utc.isoformat()}"
+# TODO: we should not update SK that often; update time should be removed from SK for property metadata cases. property event can still have datetime as part of SK
+# TODO: we can add timestamp to SK when the value changed
+# TODO: update time should be created as a GISI attribute for query purpose
+def get_sk_from_entity(
+        entity_id: str,
+        entity_type: DynamoDbPropertyTableEntityType,
+        time_in_utc: datetime | None,
+        ) -> str:
+    return f"{entity_type.value}#{entity_id}#{time_in_utc.isoformat()}" if time_in_utc != None else f"{entity_type.value}#{entity_id}"
 
 def get_address_property_type_index(state: str, zip_code: str, city: str, property_type: PropertyType) -> str:
     return f"{state}#{city}#{zip_code}#{property_type.value}"
@@ -370,7 +377,6 @@ def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
         history_events.append(history_event)
 
     # Create property history
-    print(f"last updated: {last_updated}")
     property_history = IPropertyHistory(
         address=address,
         history=history_events,
@@ -492,7 +498,11 @@ class DynamoDBServiceForProperty:
         print(f"After check DynamoDB table {table_name} exists in region {region_name}.")
         self.dynamodb_resource = boto3.resource('dynamodb', region_name=region_name)
         self.table = self.dynamodb_resource.Table(self.table_name)
+
+        # Set up logging
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        self.logger.propagate = True
 
     def get_property_by_id(self, property_id: str) -> IProperty | None:
         """
@@ -580,7 +590,6 @@ class DynamoDBServiceForProperty:
             self.logger.error(f"Error retrieving property with address {address}: {error.response['Error']['Message']}")
             raise error
 
-    # TODO: need to skip update if no new entries exist in the record
     def create_or_update_property(self, property_metadata: IPropertyMetadata, property_history: IPropertyHistory) -> IProperty:
         """
         Create or update a property in the DynamoDB table.
@@ -614,12 +623,14 @@ class DynamoDBServiceForProperty:
             existing_property.update_metadata(property_metadata)
             existing_property.update_history(property_history)
             # self.logger.info(f"Existing property info after update:\n{existing_property}\n")
+
+            # TODO: remove get call after verified the update works correctly
             new_property = self.get_property_by_id(existing_property.id)
             if new_property == None:
                 raise ValueError(f"new property should not be none, query id: {existing_property.id}")
             if new_property != existing_property:
                 IProperty.compare_print_diff(new_property, existing_property)
-                raise ValueError(f"db record is not same as record in memory after DB update")
+                self.logger.error(f"db record is not same as record in memory after DB update for property: id={new_property.id}, address={new_property.metadata.address}")
             new_property = existing_property
 
         else:
@@ -644,6 +655,7 @@ class DynamoDBServiceForProperty:
             with self.table.batch_writer() as writer:
                 for item in items:
                     writer.put_item(Item=item)
+            self.logger.info(f"Successfully wrote {len(items)} items to DynamoDB table {self.table.name}.")
         except ClientError as err:
             self.logger.error(
                 "Couldn't load data into table %s. Here's why: %s: %s",
@@ -692,14 +704,16 @@ class DynamoDBServiceForProperty:
 
         try:
             with self.table.batch_writer() as writer:
+                # Create new metadata first in case deletion fails
+                writer.put_item(items_to_be_added)
+
                 # Remove old metadata
                 if not is_same_key(items_to_be_removed, items_to_be_added):
                     writer.delete_item(Key = {
                         'PK': items_to_be_removed[DynamoDbPropertyTableAttributeName.PK.value],
                         'SK': items_to_be_removed[DynamoDbPropertyTableAttributeName.SK.value],
                     })
-                # Create new metadata
-                writer.put_item(items_to_be_added)
+
         except ClientError as err:
             self.logger.error(
                 "Couldn't load data into table %s. Here's why: %s: %s",
@@ -846,6 +860,7 @@ def store_property_from_file(filename: str, table_name: str, region: str) -> Non
         count = 0
         print("Start to save property to DynamoDB")
         for metadata, history in reader:
+            print(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
             new_property = dynamoDbService.create_or_update_property(metadata, history)
 
             # Check if record in db equal to the input
@@ -876,7 +891,7 @@ if __name__ == "__main__":
     region = "us-west-2"
 
     # Input file
-    file_name = "redfin_properties_20250711_190733.jsonl"
+    file_name = "redfin_properties_20250714_203858-2.jsonl"
 
     # Read from file and save to DynamoDB
     store_property_from_file(file_name, table_name, region)
@@ -895,7 +910,7 @@ if __name__ == "__main__":
     #     print(f"Property with address {property_id} not found")
 
     # Query by address
-    # address_str = "7988 170th Ave NE (Homesite #14), Redmond, WA 98052"
+    # address_str = "10816 NE 154th Pl, Bothell, WA 98011"
     # address_obj = IPropertyAddress(address_str)
     # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
     # property_obj = dynamoDbService.get_property_by_address(address_obj)
