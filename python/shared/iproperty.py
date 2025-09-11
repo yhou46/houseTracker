@@ -168,6 +168,7 @@ class IPropertyHistoryEvent:
             return NotImplemented
         return not (self < other)
 
+# TODO: should we have property id included in history?
 # All prices are in USD
 class IPropertyHistory:
     def __init__(
@@ -212,8 +213,6 @@ class IPropertyHistory:
         combined_events = existing_history.history + new_history.history
         unique_events = []
         for event in combined_events:
-            # TODO: there is one case: some events are missing some fields but later the field gets added
-            # Example: PriceChange event,  price is missing, later price is added. In this case, we want to have only 1 event instead of 2
             if event not in unique_events:
                 unique_events.append(event)
         # Sort by event datetime using natural ordering
@@ -341,6 +340,25 @@ class IPropertyMetadata(IPropertyBasic):
     @property
     def data_sources(self) -> List[IPropertyDataSource]:
         return self._data_sources
+
+    def is_equal(
+        self,
+        other_metadata: "IPropertyMetadata",
+        exclude_last_updated: bool,
+        ) -> bool:
+        """
+        Compare two IPropertyMetadata objects, with option to exclude last_updated field.
+        Behave the same as __eq__ if exclude_last_updated is False.
+        """
+        if exclude_last_updated:
+            return (
+                super().__eq__(other_metadata) and
+                self.status == other_metadata.status and
+                self._price == other_metadata._price and
+                self._data_sources == other_metadata._data_sources
+            )
+        else:
+            return self.__eq__(other_metadata)
 
     def __str__(self) -> str:
         return (

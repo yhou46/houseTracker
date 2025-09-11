@@ -3,7 +3,17 @@ import usaddress # type: ignore[import-untyped]
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from shared.iproperty import IPropertyHistory, IPropertyHistoryEvent, PropertyHistoryEventType
+from shared.iproperty import (
+    IPropertyHistory,
+    IPropertyHistoryEvent,
+    PropertyHistoryEventType,
+    IPropertyMetadata,
+    PropertyArea,
+    PropertyType,
+    PropertyStatus,
+    IPropertyDataSource,
+    AreaUnit,
+    )
 from shared.iproperty_address import IPropertyAddress, get_address_components
 
 class Test_get_address(unittest.TestCase):
@@ -34,6 +44,306 @@ class Test_get_address(unittest.TestCase):
             components = get_address_components(fullAddress)
             unit  = components.get("unit", "")
             self.assertEqual(expectedStreetAddress, unit)
+
+class Test_IPropertyMetadata(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        # Create shared test data
+        self.test_address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
+        self.test_area = PropertyArea(Decimal("2000"), AreaUnit.SquareFeet)
+        self.test_lot_area = PropertyArea(Decimal("0.25"), AreaUnit.Acres)
+        self.test_property_type = PropertyType.SingleFamily
+        self.test_bedrooms = Decimal("3")
+        self.test_bathrooms = Decimal("2.5")
+        self.test_year_built = 2010
+        self.test_status = PropertyStatus.Active
+        self.test_price = Decimal("750000")
+        self.test_last_updated = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        self.test_data_sources = [
+            IPropertyDataSource("redfin_123", "https://redfin.com/property/123", "Redfin"),
+            IPropertyDataSource("zillow_456", "https://zillow.com/property/456", "Zillow")
+        ]
+
+        # Create base metadata object
+        self.base_metadata = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+
+    def test_eq_identical_metadata(self) -> None:
+        """Test that identical metadata objects are equal."""
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertEqual(self.base_metadata, metadata2)
+
+    def test_eq_different_address(self) -> None:
+        """Test that metadata with different addresses are not equal."""
+        different_address = IPropertyAddress("456 Oak Ave,Redmond, WA 98052")
+        metadata2 = IPropertyMetadata(
+            address=different_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_eq_different_area(self) -> None:
+        """Test that metadata with different areas are not equal."""
+        different_area = PropertyArea(Decimal("2500"), AreaUnit.SquareFeet)
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=different_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_eq_different_property_type(self) -> None:
+        """Test that metadata with different property types are not equal."""
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=PropertyType.Condo,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_eq_different_status(self) -> None:
+        """Test that metadata with different status are not equal."""
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=PropertyStatus.Sold,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_eq_different_price(self) -> None:
+        """Test that metadata with different prices are not equal."""
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=Decimal("800000"),
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_eq_price_none_comparison(self) -> None:
+        """Test price comparison when one or both prices are None."""
+        # Both None
+        metadata_no_price1 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=None,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        metadata_no_price2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=None,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+        self.assertEqual(metadata_no_price1, metadata_no_price2)
+
+        # One None, one with price
+        self.assertNotEqual(metadata_no_price1, self.base_metadata)
+
+    def test_eq_different_last_updated(self) -> None:
+        """Test that metadata with different last_updated timestamps are not equal."""
+        different_timestamp = datetime(2024, 1, 16, 10, 30, 0, tzinfo=timezone.utc)
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=different_timestamp,
+            data_sources=self.test_data_sources
+        )
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_eq_with_non_metadata_object(self) -> None:
+        """Test that comparison with non-IPropertyMetadata objects returns False."""
+        self.assertNotEqual(self.base_metadata, "not a metadata object")
+        self.assertNotEqual(self.base_metadata, 123)
+        self.assertNotEqual(self.base_metadata, None)
+
+    def test_is_equal_exclude_last_updated_false(self) -> None:
+        """Test that is_equal with exclude_last_updated=False behaves same as __eq__."""
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=self.test_last_updated,
+            data_sources=self.test_data_sources
+        )
+
+        # Should be equal
+        self.assertTrue(self.base_metadata.is_equal(metadata2, exclude_last_updated=False))
+        self.assertEqual(self.base_metadata, metadata2)
+
+        # Test with different last_updated
+        different_timestamp = datetime(2024, 1, 16, 10, 30, 0, tzinfo=timezone.utc)
+        metadata3 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=different_timestamp,
+            data_sources=self.test_data_sources
+        )
+
+        # Should not be equal
+        self.assertFalse(self.base_metadata.is_equal(metadata3, exclude_last_updated=False))
+        self.assertNotEqual(self.base_metadata, metadata3)
+
+    def test_is_equal_exclude_last_updated_true(self) -> None:
+        """Test that is_equal with exclude_last_updated=True ignores last_updated field."""
+        different_timestamp = datetime(2024, 1, 16, 10, 30, 0, tzinfo=timezone.utc)
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=self.test_price,
+            last_updated=different_timestamp,  # Different timestamp
+            data_sources=self.test_data_sources
+        )
+
+        # Should be equal when excluding last_updated
+        self.assertTrue(self.base_metadata.is_equal(metadata2, exclude_last_updated=True))
+
+        # But should not be equal with __eq__ (which includes last_updated)
+        self.assertNotEqual(self.base_metadata, metadata2)
+
+    def test_is_equal_exclude_last_updated_true_different_other_fields(self) -> None:
+        """Test that is_equal with exclude_last_updated=True still checks other fields."""
+        different_timestamp = datetime(2024, 1, 16, 10, 30, 0, tzinfo=timezone.utc)
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=PropertyStatus.Sold,  # Different status
+            price=self.test_price,
+            last_updated=different_timestamp,
+            data_sources=self.test_data_sources
+        )
+
+        # Should not be equal even when excluding last_updated due to different status
+        self.assertFalse(self.base_metadata.is_equal(metadata2, exclude_last_updated=True))
+
+    def test_is_equal_exclude_last_updated_true_different_price(self) -> None:
+        """Test that is_equal with exclude_last_updated=True still checks price."""
+        different_timestamp = datetime(2024, 1, 16, 10, 30, 0, tzinfo=timezone.utc)
+        metadata2 = IPropertyMetadata(
+            address=self.test_address,
+            area=self.test_area,
+            property_type=self.test_property_type,
+            lot_area=self.test_lot_area,
+            number_of_bedrooms=self.test_bedrooms,
+            number_of_bathrooms=self.test_bathrooms,
+            year_built=self.test_year_built,
+            status=self.test_status,
+            price=Decimal("800000"),  # Different price
+            last_updated=different_timestamp,
+            data_sources=self.test_data_sources
+        )
+
+        # Should not be equal even when excluding last_updated due to different price
+        self.assertFalse(self.base_metadata.is_equal(metadata2, exclude_last_updated=True))
 
 class Test_IPropertyHistoryEvent(unittest.TestCase):
     def test_equality_identical_events(self) -> None:
