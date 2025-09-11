@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import os
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from crawler.redfin_spider.items import RedfinPropertyItem
 from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
@@ -93,7 +94,7 @@ def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datet
 
     if dt.tzinfo is None:
         # Timezone-naive datetime - assume Pacific Time (UTC-8)
-        pacific_tz = timezone(timedelta(hours=-8))
+        pacific_tz = ZoneInfo("America/Los_Angeles")
         dt = dt.replace(tzinfo=pacific_tz)
         return dt.astimezone(timezone.utc)
     else:
@@ -346,11 +347,11 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             source_id=source_id,
             price=price,
         )
-        if history_event in property_history.history:
+        if history_event not in property_history.history:
             # Add event to history if not already present
-            print(f"Found duplicate event: {history_event} for property {property_id}, address {address}")
-        else:
             property_history.addEvent(history_event)
+        else:
+            print(f"Found duplicate event: {history_event} for property {property_id}, address {address}")
 
     return property_history
 

@@ -108,8 +108,15 @@ class DynamoDbPropertyTableGlobalSecondaryIndexName(Enum):
 def get_pk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType) -> str:
     return f"{entity_type.value}#{entity_id}"
 
-def get_sk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType, time_in_utc: datetime) -> str:
-    return f"{entity_type.value}#{entity_id}#{time_in_utc.isoformat()}"
+# TODO: we should not update SK that often; update time should be removed from SK for property metadata cases. property event can still have datetime as part of SK
+# TODO: we can add timestamp to SK when the value changed
+# TODO: update time should be created as a GISI attribute for query purpose
+def get_sk_from_entity(
+        entity_id: str,
+        entity_type: DynamoDbPropertyTableEntityType,
+        time_in_utc: datetime | None,
+        ) -> str:
+    return f"{entity_type.value}#{entity_id}#{time_in_utc.isoformat()}" if time_in_utc != None else f"{entity_type.value}#{entity_id}"
 
 def get_address_property_type_index(state: str, zip_code: str, city: str, property_type: PropertyType) -> str:
     return f"{state}#{city}#{zip_code}#{property_type.value}"
@@ -182,7 +189,7 @@ def convert_property_metadata_to_dynamodb_items(metadata: IPropertyMetadata, pro
 
     # Set up partition key and sort key
     metadata_item[DynamoDbPropertyTableAttributeName.PK.value] = get_pk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property)
-    metadata_item[DynamoDbPropertyTableAttributeName.SK.value] = get_sk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property, metadata.last_updated)
+    metadata_item[DynamoDbPropertyTableAttributeName.SK.value] = get_sk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property, None)
 
     # Set up global secondary indexes
     # Check table creation for attribute details
@@ -370,7 +377,6 @@ def convert_dynamodb_item_to_property(items: List[Dict[str, Any]]) -> IProperty:
         history_events.append(history_event)
 
     # Create property history
-    print(f"last updated: {last_updated}")
     property_history = IPropertyHistory(
         address=address,
         history=history_events,
@@ -485,14 +491,18 @@ class DynamoDBServiceForProperty:
             table_name: DynamoDB table name (defaults to schema default)
             region_name: AWS region name
         """
+        # Set up logging
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        self.logger.propagate = True
+
+        # Check if table exists
         self.table_name = table_name
         self.dynamodb_client = boto3.client('dynamodb', region_name=region_name)
         if not check_dynamodb_table_exists(table_name, self.dynamodb_client):
             raise ValueError(f"DynamoDB table: {table_name} does not exist in region {region_name}.")
-        print(f"After check DynamoDB table {table_name} exists in region {region_name}.")
         self.dynamodb_resource = boto3.resource('dynamodb', region_name=region_name)
         self.table = self.dynamodb_resource.Table(self.table_name)
-        self.logger = logging.getLogger(__name__)
 
     def get_property_by_id(self, property_id: str) -> IProperty | None:
         """
@@ -580,7 +590,6 @@ class DynamoDBServiceForProperty:
             self.logger.error(f"Error retrieving property with address {address}: {error.response['Error']['Message']}")
             raise error
 
-    # TODO: need to skip update if no new entries exist in the record
     def create_or_update_property(self, property_metadata: IPropertyMetadata, property_history: IPropertyHistory) -> IProperty:
         """
         Create or update a property in the DynamoDB table.
@@ -592,34 +601,36 @@ class DynamoDBServiceForProperty:
             None
         """
         # Check if the property already exists
-        # TODO: here property metadata will have duplicates since the last updated value is different and it is part of SK; need to remove duplicates
         existing_property = self.get_property_by_address(property_metadata.address)
         new_property = None
         if existing_property:
             self.logger.info(f"Property with ID {existing_property.id} already exists. Updating the property.")
 
             # Update DB record
-            # TODO: need to remove duplicate metadata in DB
             self._update_property_metadata(
                 existing_metadata=existing_property.metadata,
                 new_metadata=property_metadata,
                 property_id=existing_property.id,
             )
-            self._updateproperty_history(
+            self._update_property_history(
                 existing_history=existing_property.history,
                 new_history=property_history,
                 property_id=existing_property.id,
             )
 
             # Merge the existing property with the new one
+            # self.logger.info(f"Existing property info before update:\n{existing_property}\n")
             existing_property.update_metadata(property_metadata)
             existing_property.update_history(property_history)
+            # self.logger.info(f"Existing property info after update:\n{existing_property}\n")
+
+            # TODO: remove get call after verified the update works correctly
             new_property = self.get_property_by_id(existing_property.id)
             if new_property == None:
                 raise ValueError(f"new property should not be none, query id: {existing_property.id}")
             if new_property != existing_property:
                 IProperty.compare_print_diff(new_property, existing_property)
-                raise ValueError(f"db record is not same as record in memory after DB update")
+                self.logger.error(f"db record is not same as record in memory after DB update for property: id={new_property.id}, address={new_property.metadata.address}")
             new_property = existing_property
 
         else:
@@ -637,10 +648,14 @@ class DynamoDBServiceForProperty:
         return new_property
 
     def _write_items(self, items: List[Dict[str, Any]]) -> None:
+        if len(items) == 0:
+            self.logger.info("No items to write to DynamoDB.")
+            return
         try:
             with self.table.batch_writer() as writer:
                 for item in items:
                     writer.put_item(Item=item)
+            self.logger.info(f"Successfully wrote {len(items)} items to DynamoDB table {self.table.name}.")
         except ClientError as err:
             self.logger.error(
                 "Couldn't load data into table %s. Here's why: %s: %s",
@@ -656,7 +671,7 @@ class DynamoDBServiceForProperty:
         It will overwrite any existing data for the property.
         """
         items = convert_property_to_dynamodb_items(property)
-        print(f"Number of items to save: {len(items)}")
+        self.logger.info(f"Number of items to save: {len(items)}")
         self._write_items(items)
 
     def _update_property_metadata(
@@ -666,33 +681,23 @@ class DynamoDBServiceForProperty:
             property_id: str,
             ) -> None:
         """
-        Update property metadata by removing existing metadata and add metadata
+        Update property metadata
         """
         if (existing_metadata == new_metadata):
-            self.logger.info("metadata is same, skip the update")
+            self.logger.info("metadata is exactly the same, skip the update")
+            return
 
-        # Need to remove old metadata and add new metadata since the usually the SK is different
-        items_to_be_removed = convert_property_metadata_to_dynamodb_items(existing_metadata, property_id)
-        items_to_be_added = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
+        if (existing_metadata.last_updated >= new_metadata.last_updated):
+            self.logger.info(f"existing metadata last updated {existing_metadata.last_updated} is newer than or same as new metadata last updated {new_metadata.last_updated}, skip the update")
+            return
 
-        # Check if 2 items have same key in dynamodb
-        def is_same_key(item1: Dict[str, Any], item2: Dict[str, Any]) -> bool:
-            pk1: str = item1.get(DynamoDbPropertyTableAttributeName.PK.value, "")
-            pk2: str = item2.get(DynamoDbPropertyTableAttributeName.PK.value, "")
-            sk1: str = item1.get(DynamoDbPropertyTableAttributeName.SK.value, "")
-            sk2: str = item2.get(DynamoDbPropertyTableAttributeName.SK.value, "")
-            return pk1 == pk2 and sk1 == sk2
+        items_to_be_updated = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
 
         try:
             with self.table.batch_writer() as writer:
-                # Remove old metadata
-                if not is_same_key(items_to_be_removed, items_to_be_added):
-                    writer.delete_item(Key = {
-                        'PK': items_to_be_removed[DynamoDbPropertyTableAttributeName.PK.value],
-                        'SK': items_to_be_removed[DynamoDbPropertyTableAttributeName.SK.value],
-                    })
-                # Create new metadata
-                writer.put_item(items_to_be_added)
+                # Overwrite with new metadata
+                writer.put_item(items_to_be_updated)
+
         except ClientError as err:
             self.logger.error(
                 "Couldn't load data into table %s. Here's why: %s: %s",
@@ -702,18 +707,16 @@ class DynamoDBServiceForProperty:
             )
             raise err
 
-    def _updateproperty_history(
+    def _update_property_history(
             self,
             existing_history: IPropertyHistory,
             new_history: IPropertyHistory,
             property_id: str,
             ) -> None:
 
-        merged_history = IPropertyHistory.merge_history(existing_history, new_history)
-
         new_items = []
         for event in new_history.history:
-            if event not in merged_history.history:
+            if event not in existing_history.history:
                 new_items.append(convert_property_history_event_to_dynamodb_item(property_id, event))
         self._write_items(new_items)
 
@@ -806,7 +809,7 @@ def run_read_test(table_name: str, region: str, property_id: str) -> None:
     else:
         print(f"Property with ID {property_id} not found")
 
-def store_property_from_file(filename: str, table_name: str, region: str) -> None:
+def store_property_from_file(filename: str, table_name: str, region: str, max_update_count: int | None) -> None:
     """
     Store properties from a file into DynamoDB.
 
@@ -815,19 +818,20 @@ def store_property_from_file(filename: str, table_name: str, region: str) -> Non
         table_name (str): The name of the DynamoDB table.
         region (str): The AWS region where the DynamoDB table is located.
     """
-        # Load IProperty
+    # Set up logging
+    root_logger = logging.getLogger()
+
     # Get the directory of the current script (data_reader.py)
     current_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Go up two levels to the project root, then into redfin_output
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
     property_data_file = os.path.join(python_project_folder, "crawler", "redfin_output", filename)
-    print(property_data_file)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
 
-    print(f"Starting to read Redfin data from {property_data_file}. Error file: {error_log_file}")
+    root_logger.info(f"Starting to read Redfin data from {property_data_file}. Error file: {error_log_file}")
 
     with open(error_log_file, 'w', encoding='utf-8') as error_file:
         def file_error_handler(error: PropertyDataStreamParsingError) -> None:
@@ -839,42 +843,66 @@ def store_property_from_file(filename: str, table_name: str, region: str) -> Non
         dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
 
         count = 0
-        print("Start to save property to DynamoDB")
+        root_logger.info("Start to save property to DynamoDB")
         for metadata, history in reader:
-            new_property = dynamoDbService.create_or_update_property(metadata, history)
+            root_logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
 
-            # Check if record in db equal to the input
-            property_in_db = dynamoDbService.get_property_by_id(new_property.id)
-            # print(f"Property in DB: {property_in_db}")
-            # print(f"Property in DB equal to the input: {property_in_db == new_property}")
-
-            if property_in_db == None:
-                raise ValueError(f"Failed to get property in DB: {new_property.id}")
-
-            if property_in_db != new_property:
-                if property_in_db:
-                    IProperty.compare_print_diff(new_property, property_in_db)
-                raise ValueError(f"Saved property is not equal to the one in DB, address: {property_in_db.address}, property id: {property_in_db.id}")
+            # Update or create property
+            dynamoDbService.create_or_update_property(metadata, history)
 
             count += 1
+            if max_update_count and count >= max_update_count:
+                root_logger.info(f"Reached max update count: {max_update_count}, stop processing further")
+                break
             if count % 100 == 0:
-                print(f"Processed count: {count}, sleep for 10 seconds")
-                time.sleep(10)
-        print(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
+                sleep_seconds = 5
+                root_logger.info(f"Processed count: {count}, sleep for {sleep_seconds} seconds")
+                time.sleep(sleep_seconds)
+        root_logger.info(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
+
+# Configure logging to write to both console and file
+def setup_logging() -> str:
+    """Set up logging configuration to write to both console and file."""
+    # Create logs directory if it doesn't exist
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    logs_dir = os.path.join(current_dir, "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+
+    # Create log filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = os.path.join(logs_dir, f"dynamodb_service_{timestamp}.log")
+
+    # Configure root logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),  # Console handler
+            logging.FileHandler(log_filename)  # File handler
+        ]
+    )
+
+    return log_filename
 
 if __name__ == "__main__":
-    # Set up logging
-    logging.basicConfig(level=logging.INFO)
+    # Logging is already configured at module level
+    # Set up logging when module is imported
+    log_file = setup_logging()
+    print(f"Logging configured. Log file: {log_file}")
 
     # Dynamodb set up
     table_name = "properties"
     region = "us-west-2"
 
     # Input file
-    file_name = "redfin_properties_20250710_175005-2.jsonl"
+    file_name = "redfin_properties_20250716_212324.jsonl"
 
     # Read from file and save to DynamoDB
-    # store_property_from_file(file_name, table_name, region)
+    store_property_from_file(
+        file_name, table_name,
+        region,
+        max_update_count=None,
+        )
 
     # Write test
     # run_save_test(table_name, region)
@@ -890,14 +918,14 @@ if __name__ == "__main__":
     #     print(f"Property with address {property_id} not found")
 
     # Query by address
-    address_str = "7988 170th Ave NE (Homesite #14), Redmond, WA 98052"
-    address_obj = IPropertyAddress(address_str)
-    dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    property_obj = dynamoDbService.get_property_by_address(address_obj)
-    if property_obj:
-        print(f"Retrieved property by address: {property_obj}")
-    else:
-        print(f"Property with address {address_str} not found")
+    # address_str = "7503 152nd Ave NE, Redmond, WA 98052"
+    # address_obj = IPropertyAddress(address_str)
+    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    # property_obj = dynamoDbService.get_property_by_address(address_obj)
+    # if property_obj:
+    #     print(f"Retrieved property by address: {property_obj}")
+    # else:
+    #     print(f"Property with address {address_str} not found")
 
     # Delete test
     # property_id = "25738d02-56df-4bd4-959e-144cd7eb5e12"
