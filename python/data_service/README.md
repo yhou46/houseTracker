@@ -18,3 +18,8 @@ It stores crawled data into a DB
     # Set up default profile so that you can omit --profile for aws cli commands
     export AWS_PROFILE="your profile"
     ```
+
+## Import data from json file to dynamoDB
+```shell
+pipenv run python ./data_service/dynamodb_property_service.py | tee "output_$(date +%Y-%m-%d_%H-%M-%S).log"
+```
