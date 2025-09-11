@@ -691,29 +691,12 @@ class DynamoDBServiceForProperty:
             self.logger.info(f"existing metadata last updated {existing_metadata.last_updated} is newer than or same as new metadata last updated {new_metadata.last_updated}, skip the update")
             return
 
-        # Need to remove old metadata and add new metadata since the usually the SK is different
-        # items_to_be_removed = convert_property_metadata_to_dynamodb_items(existing_metadata, property_id)
         items_to_be_updated = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
-
-        # # Check if 2 items have same key in dynamodb
-        # def is_same_key(item1: Dict[str, Any], item2: Dict[str, Any]) -> bool:
-        #     pk1: str = item1.get(DynamoDbPropertyTableAttributeName.PK.value, "")
-        #     pk2: str = item2.get(DynamoDbPropertyTableAttributeName.PK.value, "")
-        #     sk1: str = item1.get(DynamoDbPropertyTableAttributeName.SK.value, "")
-        #     sk2: str = item2.get(DynamoDbPropertyTableAttributeName.SK.value, "")
-        #     return pk1 == pk2 and sk1 == sk2
 
         try:
             with self.table.batch_writer() as writer:
                 # Overwrite with new metadata
                 writer.put_item(items_to_be_updated)
-
-                # # Remove old metadata
-                # if not is_same_key(items_to_be_removed, items_to_be_updated):
-                #     writer.delete_item(Key = {
-                #         'PK': items_to_be_removed[DynamoDbPropertyTableAttributeName.PK.value],
-                #         'SK': items_to_be_removed[DynamoDbPropertyTableAttributeName.SK.value],
-                #     })
 
         except ClientError as err:
             self.logger.error(
