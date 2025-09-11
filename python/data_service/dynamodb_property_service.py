@@ -108,9 +108,7 @@ class DynamoDbPropertyTableGlobalSecondaryIndexName(Enum):
 def get_pk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType) -> str:
     return f"{entity_type.value}#{entity_id}"
 
-# TODO: we should not update SK that often; update time should be removed from SK for property metadata cases. property event can still have datetime as part of SK
-# TODO: we can add timestamp to SK when the value changed
-# TODO: update time should be created as a GISI attribute for query purpose
+# TODO: update time should be created as a GSI attribute for query purpose
 def get_sk_from_entity(
         entity_id: str,
         entity_type: DynamoDbPropertyTableEntityType,
