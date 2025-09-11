@@ -347,11 +347,11 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             source_id=source_id,
             price=price,
         )
-        if history_event in property_history.history:
+        if history_event not in property_history.history:
             # Add event to history if not already present
-            print(f"Found duplicate event: {history_event} for property {property_id}, address {address}")
-        else:
             property_history.addEvent(history_event)
+        else:
+            print(f"Found duplicate event: {history_event} for property {property_id}, address {address}")
 
     return property_history
 
