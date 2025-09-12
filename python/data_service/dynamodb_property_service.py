@@ -1,4 +1,10 @@
-from typing import List, Optional, Literal, Dict, Any
+from typing import (
+    List,
+    Literal,
+    Dict,
+    Any,
+    Tuple,
+)
 from datetime import datetime, timezone
 import json
 import logging
@@ -29,14 +35,17 @@ from shared.iproperty import (
     IPropertyMetadata,
     PropertyHistoryEventType,
 )
-
 from shared.iproperty_address import IPropertyAddress
-
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
     PropertyDataStreamParsingError,
     IPropertyDataStream,
 )
+from data_service.iproperty_service import (
+    IPropertyService,
+    PropertyQueryPattern,
+    IPropertyServiceLastEvaluateKeyType,
+    )
 
 class DynamoDbPropertyTableEntityType(Enum):
     Property = "PROPERTY"
@@ -108,9 +117,7 @@ class DynamoDbPropertyTableGlobalSecondaryIndexName(Enum):
 def get_pk_from_entity(entity_id: str, entity_type: DynamoDbPropertyTableEntityType) -> str:
     return f"{entity_type.value}#{entity_id}"
 
-# TODO: we should not update SK that often; update time should be removed from SK for property metadata cases. property event can still have datetime as part of SK
-# TODO: we can add timestamp to SK when the value changed
-# TODO: update time should be created as a GISI attribute for query purpose
+# TODO: update time should be created as a GSI attribute for query purpose
 def get_sk_from_entity(
         entity_id: str,
         entity_type: DynamoDbPropertyTableEntityType,
@@ -482,7 +489,7 @@ def create_dynambodb_table_for_property(
 
     print(f"Table {table_name} created successfully")
 
-class DynamoDBServiceForProperty:
+class DynamoDBPropertyService(IPropertyService):
     def __init__(self, table_name: str, region_name: str = "us-west-2"):
         """
         Initialize DynamoDB service
@@ -504,6 +511,11 @@ class DynamoDBServiceForProperty:
         self.dynamodb_resource = boto3.resource('dynamodb', region_name=region_name)
         self.table = self.dynamodb_resource.Table(self.table_name)
 
+    """
+    ===========================================
+    Public methods
+    ===========================================
+    """
     def get_property_by_id(self, property_id: str) -> IProperty | None:
         """
         Retrieve a property by its ID from the DynamoDB table.
@@ -524,29 +536,6 @@ class DynamoDBServiceForProperty:
 
             # Convert DynamoDB items to IProperty object
             return convert_dynamodb_item_to_property(items)
-        except ClientError as error:
-            self.logger.error(f"Error retrieving property with ID {property_id}: {error.response['Error']['Message']}")
-            raise error
-
-    def _query_items_by_property_id(self, property_id: str) -> List[Dict[str, Any]]:
-        """
-        Retrieve a property by its ID from the DynamoDB table.
-
-        Args:
-            property_id (str): The ID of the property to retrieve.
-
-        Returns:
-            Optional[IProperty]: The property object if found, otherwise None.
-        """
-        self.logger.info(f"Querying property with ID {property_id} from DynamoDB table {self.table_name}")
-        try:
-            partition_key = get_pk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property)
-            response = self.table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('PK').eq(partition_key))
-            items = response['Items']
-
-            # for item in items:
-            #     self.logger.info(item)
-            return items if items else []
         except ClientError as error:
             self.logger.error(f"Error retrieving property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
@@ -647,6 +636,70 @@ class DynamoDBServiceForProperty:
             self._write_property(new_property)
         return new_property
 
+    def delete_property_by_id(self, property_id: str) -> None:
+        """
+        Delete a property by its ID from the DynamoDB table.
+
+        Args:
+            property_id (str): The ID of the property to delete.
+
+        Returns:
+            bool: True if deletion was successful, False otherwise.
+        """
+        try:
+            self.logger.info(f"Will delete property with id: {property_id}")
+            property_items = self._query_items_by_property_id(property_id)
+
+            with self.table.batch_writer() as writer:
+                for item in property_items:
+                    writer.delete_item(Key={
+                        'PK': item[DynamoDbPropertyTableAttributeName.PK.value],
+                        'SK': item[DynamoDbPropertyTableAttributeName.SK.value],
+                    })
+        except ClientError as error:
+            self.logger.error(f"Error deleting property with ID {property_id}: {error.response['Error']['Message']}")
+            raise error
+
+    def query_properties(
+        self,
+        query: PropertyQueryPattern,
+        limit: int,
+        exclusive_start_key: IPropertyServiceLastEvaluateKeyType,
+        ) -> Tuple[List[IProperty], IPropertyServiceLastEvaluateKeyType | None]:
+        raise NotImplementedError("Method not implemented yet")
+
+    def close(self) -> None:
+        if self.dynamodb_client:
+            self.dynamodb_client.close()
+
+    """
+    ===========================================
+    Private methods
+    ===========================================
+    """
+    def _query_items_by_property_id(self, property_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve a property by its ID from the DynamoDB table.
+
+        Args:
+            property_id (str): The ID of the property to retrieve.
+
+        Returns:
+            Optional[IProperty]: The property object if found, otherwise None.
+        """
+        self.logger.info(f"Querying property with ID {property_id} from DynamoDB table {self.table_name}")
+        try:
+            partition_key = get_pk_from_entity(property_id, DynamoDbPropertyTableEntityType.Property)
+            response = self.table.query(KeyConditionExpression=boto3.dynamodb.conditions.Key('PK').eq(partition_key))
+            items = response['Items']
+
+            # for item in items:
+            #     self.logger.info(item)
+            return items if items else []
+        except ClientError as error:
+            self.logger.error(f"Error retrieving property with ID {property_id}: {error.response['Error']['Message']}")
+            raise error
+
     def _write_items(self, items: List[Dict[str, Any]]) -> None:
         if len(items) == 0:
             self.logger.info("No items to write to DynamoDB.")
@@ -720,33 +773,6 @@ class DynamoDBServiceForProperty:
                 new_items.append(convert_property_history_event_to_dynamodb_item(property_id, event))
         self._write_items(new_items)
 
-    def delete_property_by_id(self, property_id: str) -> None:
-        """
-        Delete a property by its ID from the DynamoDB table.
-
-        Args:
-            property_id (str): The ID of the property to delete.
-
-        Returns:
-            bool: True if deletion was successful, False otherwise.
-        """
-        try:
-            self.logger.info(f"Will delete property with id: {property_id}")
-            property_items = self._query_items_by_property_id(property_id)
-
-            with self.table.batch_writer() as writer:
-                for item in property_items:
-                    writer.delete_item(Key={
-                        'PK': item[DynamoDbPropertyTableAttributeName.PK.value],
-                        'SK': item[DynamoDbPropertyTableAttributeName.SK.value],
-                    })
-        except ClientError as error:
-            self.logger.error(f"Error deleting property with ID {property_id}: {error.response['Error']['Message']}")
-            raise error
-
-    def close(self) -> None:
-        if self.dynamodb_client:
-            self.dynamodb_client.close()
 
 def run_save_test(table_name: str, region: str) -> None:
     # Load IProperty
@@ -777,7 +803,7 @@ def run_save_test(table_name: str, region: str) -> None:
             print(property)
 
             print("Start to save property to DynamoDB")
-            dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+            dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
             new_property = IProperty(
                 IProperty.generate_id(),
                 metadata,
@@ -802,7 +828,7 @@ def run_read_test(table_name: str, region: str, property_id: str) -> None:
         region (str): The AWS region where the DynamoDB table is located.
         property_id (str): The ID of the property to retrieve.
     """
-    dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
     property_obj = dynamoDbService.get_property_by_id(property_id)
     if property_obj:
         print(f"Retrieved property: {property_obj}")
@@ -840,7 +866,7 @@ def store_property_from_file(filename: str, table_name: str, region: str, max_up
             error_file.flush()
 
         reader: IPropertyDataStream = RedfinFileDataReader(property_data_file, file_error_handler)
-        dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+        dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
 
         count = 0
         root_logger.info("Start to save property to DynamoDB")
@@ -895,7 +921,7 @@ if __name__ == "__main__":
     region = "us-west-2"
 
     # Input file
-    file_name = "redfin_properties_20250716_212324.jsonl"
+    file_name = "redfin_properties_20250719_192955.jsonl"
 
     # Read from file and save to DynamoDB
     store_property_from_file(
@@ -907,27 +933,7 @@ if __name__ == "__main__":
     # Write test
     # run_save_test(table_name, region)
 
-    # Read test
-    # Query by id
-    # property_id = "e329420e-4dc6-4d88-bfe7-222a268c82b9"
-    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    # property_obj = dynamoDbService.get_property_by_id(property_id)
-    # if property_obj:
-    #     print(f"Retrieved property by id: {property_id}")
-    # else:
-    #     print(f"Property with address {property_id} not found")
-
-    # Query by address
-    # address_str = "7503 152nd Ave NE, Redmond, WA 98052"
-    # address_obj = IPropertyAddress(address_str)
-    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
-    # property_obj = dynamoDbService.get_property_by_address(address_obj)
-    # if property_obj:
-    #     print(f"Retrieved property by address: {property_obj}")
-    # else:
-    #     print(f"Property with address {address_str} not found")
-
     # Delete test
     # property_id = "25738d02-56df-4bd4-959e-144cd7eb5e12"
-    # dynamoDbService = DynamoDBServiceForProperty(table_name, region_name=region)
+    # dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
     # dynamoDbService.delete_property_by_id(property_id)
