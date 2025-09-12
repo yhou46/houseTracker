@@ -6,6 +6,7 @@ TODO:
 - Complete query function in dynamoDB service
 
 test1
+test2
 
 ## AWS
 ### AWS login
