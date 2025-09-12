@@ -933,26 +933,6 @@ if __name__ == "__main__":
     # Write test
     # run_save_test(table_name, region)
 
-    # Read test
-    # Query by id
-    # property_id = "e329420e-4dc6-4d88-bfe7-222a268c82b9"
-    # dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
-    # property_obj = dynamoDbService.get_property_by_id(property_id)
-    # if property_obj:
-    #     print(f"Retrieved property by id: {property_id}")
-    # else:
-    #     print(f"Property with address {property_id} not found")
-
-    # Query by address
-    # address_str = "7503 152nd Ave NE, Redmond, WA 98052"
-    # address_obj = IPropertyAddress(address_str)
-    # dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
-    # property_obj = dynamoDbService.get_property_by_address(address_obj)
-    # if property_obj:
-    #     print(f"Retrieved property by address: {property_obj}")
-    # else:
-    #     print(f"Property with address {address_str} not found")
-
     # Delete test
     # property_id = "25738d02-56df-4bd4-959e-144cd7eb5e12"
     # dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
