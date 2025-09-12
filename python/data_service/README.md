@@ -1,6 +1,11 @@
 # Data service
 It stores crawled data into a DB
 
+TODO:
+- Need have a service to scan active or pending properties in DB and crawll again to update the status since the crawler doesn't crawl off market or sold properties by default
+- Complete query function in dynamoDB service
+
+
 ## AWS
 ### AWS login
 
