@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 from botocore.exceptions import ClientError
 
 from data_service.dynamodb_property_service import (
-    DynamoDBServiceForProperty,
     DynamoDbPropertyTableAttributeName,
     DynamoDbPropertyTableEntityType,
     get_sk_from_entity,
