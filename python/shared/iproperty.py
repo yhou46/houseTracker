@@ -227,7 +227,7 @@ class IPropertyHistory:
 
     def __str__(self) -> str:
         history_str = "\n".join(str(event) for event in self._history)
-        return f"Address: {self._address.address_hash},\nHistory:\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.isoformat()}"
+        return f"History:\nAddress_hash of history: {self._address.address_hash},\n{history_str if history_str else 'No history available'},\nlastUpdated: {self.last_updated.isoformat()}"
 
     def __eq__(self, value: Any) -> bool:
         if not isinstance(value, IPropertyHistory):
@@ -459,7 +459,7 @@ class IProperty():
         return (
             f"id: {self.id}\n" +
             self._metadata.__str__() +
-            f"\nHistory:\n{self._history.__str__()}"
+            f"\n{self._history.__str__()}"
         )
 
     def __eq__(self, other: object) -> bool:

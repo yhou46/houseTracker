@@ -23,3 +23,9 @@ It stores crawled data into a DB
 ```shell
 pipenv run python ./data_service/dynamodb_property_service.py | tee "output_$(date +%Y-%m-%d_%H-%M-%S).log"
 ```
+
+## Property query tools
+```shell
+pipenv run python data_service/property_query_tool.py --id "<property id>"
+pipenv run python data_service/property_query_tool.py --address "<full address string>"
+```
