@@ -5,6 +5,7 @@ TODO:
 - Need have a service to scan active or pending properties in DB and crawll again to update the status since the crawler doesn't crawl off market or sold properties by default
 - Complete query function in dynamoDB service
 
+test1
 
 ## AWS
 ### AWS login
