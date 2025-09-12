@@ -90,3 +90,6 @@ class IPropertyService(ABC):
     """
     Other
     """
+    @abstractmethod
+    def close(self) -> None:
+        pass
