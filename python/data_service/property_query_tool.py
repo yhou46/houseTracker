@@ -10,27 +10,23 @@ import argparse
 import json
 import logging
 import sys
-from typing import Optional
 
 from shared.iproperty import IProperty
 from shared.iproperty_address import IPropertyAddress, InvalidAddressError
 from data_service.dynamodb_property_service import DynamoDBPropertyService
+import shared.logger_factory as logger_factory
 
 
 def setup_logging() -> logging.Logger:
     """Set up logging configuration for the tool."""
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
 
-    # Create console handler if not already present
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+    logger_factory.configure_logger(
+        enable_file_logging = False,
+        enable_console_logging= True,
+        log_level=logging.INFO,
+    )
 
+    logger = logger_factory.get_logger(__name__)
     return logger
 
 
@@ -191,7 +187,7 @@ Examples:
         if property_obj is None:
             query_type = "ID" if args.id else "address"
             query_value = args.id if args.id else args.address
-            print(f"Property not found for {query_type}: {query_value}")
+            logger.info(f"Property not found for {query_type}: {query_value}")
             sys.exit(1)
 
         # Format and output results
@@ -200,7 +196,7 @@ Examples:
         else:  # summary
             output = format_property_summary(property_obj)
 
-        print(output)
+        logger.info(output)
 
         # Close service
         service.close()

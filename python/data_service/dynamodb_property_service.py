@@ -36,6 +36,7 @@ from shared.iproperty import (
     PropertyHistoryEventType,
 )
 from shared.iproperty_address import IPropertyAddress
+import shared.logger_factory as logger_factory
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
     PropertyDataStreamParsingError,
@@ -45,7 +46,7 @@ from data_service.iproperty_service import (
     IPropertyService,
     PropertyQueryPattern,
     IPropertyServiceLastEvaluateKeyType,
-    )
+)
 
 class DynamoDbPropertyTableEntityType(Enum):
     Property = "PROPERTY"
@@ -499,9 +500,7 @@ class DynamoDBPropertyService(IPropertyService):
             region_name: AWS region name
         """
         # Set up logging
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
-        self.logger.propagate = True
+        self.logger = logger_factory.get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Check if table exists
         self.table_name = table_name
@@ -613,13 +612,13 @@ class DynamoDBPropertyService(IPropertyService):
             existing_property.update_history(property_history)
             # self.logger.info(f"Existing property info after update:\n{existing_property}\n")
 
-            # TODO: remove get call after verified the update works correctly
-            new_property = self.get_property_by_id(existing_property.id)
-            if new_property == None:
-                raise ValueError(f"new property should not be none, query id: {existing_property.id}")
-            if new_property != existing_property:
-                IProperty.compare_print_diff(new_property, existing_property)
-                self.logger.error(f"db record is not same as record in memory after DB update for property: id={new_property.id}, address={new_property.metadata.address}")
+            # Debug
+            # new_property = self.get_property_by_id(existing_property.id)
+            # if new_property == None:
+            #     raise ValueError(f"new property should not be none, query id: {existing_property.id}")
+            # if new_property != existing_property:
+            #     IProperty.compare_print_diff(new_property, existing_property)
+            #     self.logger.error(f"db record is not same as record in memory after DB update for property: id={new_property.id}, address={new_property.metadata.address}")
             new_property = existing_property
 
         else:
@@ -845,7 +844,7 @@ def store_property_from_file(filename: str, table_name: str, region: str, max_up
         region (str): The AWS region where the DynamoDB table is located.
     """
     # Set up logging
-    root_logger = logging.getLogger()
+    logger = logger_factory.get_logger(__name__)
 
     # Get the directory of the current script (data_reader.py)
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -857,7 +856,7 @@ def store_property_from_file(filename: str, table_name: str, region: str, max_up
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
 
-    root_logger.info(f"Starting to read Redfin data from {property_data_file}. Error file: {error_log_file}")
+    logger.info(f"Starting to read Redfin data from {property_data_file}. Error file: {error_log_file}")
 
     with open(error_log_file, 'w', encoding='utf-8') as error_file:
         def file_error_handler(error: PropertyDataStreamParsingError) -> None:
@@ -869,59 +868,63 @@ def store_property_from_file(filename: str, table_name: str, region: str, max_up
         dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
 
         count = 0
-        root_logger.info("Start to save property to DynamoDB")
+        logger.info("Start to save property to DynamoDB")
         for metadata, history in reader:
-            root_logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
+            logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
 
             # Update or create property
             dynamoDbService.create_or_update_property(metadata, history)
 
             count += 1
             if max_update_count and count >= max_update_count:
-                root_logger.info(f"Reached max update count: {max_update_count}, stop processing further")
+                logger.info(f"Reached max update count: {max_update_count}, stop processing further")
                 break
             if count % 100 == 0:
                 sleep_seconds = 5
-                root_logger.info(f"Processed count: {count}, sleep for {sleep_seconds} seconds")
+                logger.info(f"Processed count: {count}, sleep for {sleep_seconds} seconds")
                 time.sleep(sleep_seconds)
-        root_logger.info(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
+        logger.info(f"Finished processing. Total properties processed: {count}, reader errors logged to {error_log_file}, service log file: {logger_factory.get_log_file_path()}")
 
-# Configure logging to write to both console and file
-def setup_logging() -> str:
-    """Set up logging configuration to write to both console and file."""
-    # Create logs directory if it doesn't exist
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    logs_dir = os.path.join(current_dir, "logs")
-    os.makedirs(logs_dir, exist_ok=True)
+# # Configure logging to write to both console and file
+# def setup_logging() -> str:
+#     """Set up logging configuration to write to both console and file."""
+#     # Create logs directory if it doesn't exist
+#     current_dir = os.path.dirname(os.path.abspath(__file__))
+#     logs_dir = os.path.join(current_dir, "logs")
+#     os.makedirs(logs_dir, exist_ok=True)
 
-    # Create log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = os.path.join(logs_dir, f"dynamodb_service_{timestamp}.log")
+#     # Create log filename with timestamp
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     log_filename = os.path.join(logs_dir, f"dynamodb_service_{timestamp}.log")
 
-    # Configure root logger
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),  # Console handler
-            logging.FileHandler(log_filename)  # File handler
-        ]
-    )
+#     # Configure root logger
+#     logging.basicConfig(
+#         level=logging.INFO,
+#         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#         handlers=[
+#             logging.StreamHandler(),  # Console handler
+#             logging.FileHandler(log_filename)  # File handler
+#         ]
+#     )
 
-    return log_filename
+#     return log_filename
 
 if __name__ == "__main__":
     # Logging is already configured at module level
     # Set up logging when module is imported
-    log_file = setup_logging()
-    print(f"Logging configured. Log file: {log_file}")
+    log_file_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    log_file_prefix = "dynamodb_service"
+    logger_factory.configure_logger(
+        log_file_path=log_file_dir,
+        log_file_prefix=log_file_prefix,
+    )
 
     # Dynamodb set up
     table_name = "properties"
     region = "us-west-2"
 
     # Input file
-    file_name = "redfin_properties_20250719_192955.jsonl"
+    file_name = "redfin_properties_20250723_173800.jsonl"
 
     # Read from file and save to DynamoDB
     store_property_from_file(

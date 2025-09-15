@@ -29,7 +29,8 @@ class LoggerFactory:
         self.log_level = self._get_log_level()
         self.log_format = '[%(asctime)s] [%(name)s] [%(levelname)s] [%(threadName)s] %(message)s'
         self.date_format = '%Y-%m-%d %H:%M:%S'
-        self.enable_console = self._get_console_setting()
+        self.enable_console_logging = self._get_console_setting()
+        self.enable_file_logging = True
         self.max_file_size = 10 * 1024 * 1024  # 10MB
         self.backup_count = 5
 
@@ -79,18 +80,19 @@ class LoggerFactory:
         )
 
         # File handler with rotation
-        file_handler = RotatingFileHandler(
-            filename=self.log_file_path,
-            maxBytes=self.max_file_size,
-            backupCount=self.backup_count,
-            encoding='utf-8'
-        )
-        file_handler.setLevel(self.log_level)
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        if self.enable_file_logging:
+            file_handler = RotatingFileHandler(
+                filename=self.log_file_path,
+                maxBytes=self.max_file_size,
+                backupCount=self.backup_count,
+                encoding='utf-8'
+            )
+            file_handler.setLevel(self.log_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
 
         # Console handler (optional)
-        if self.enable_console:
+        if self.enable_console_logging:
             console_handler = logging.StreamHandler()
             console_handler.setLevel(self.log_level)
             console_handler.setFormatter(formatter)
@@ -122,7 +124,9 @@ class LoggerFactory:
                    log_dir: str | None = None,
                    log_file_prefix: str | None = None,
                    log_level: int | None = None,
-                   enable_console: bool | None = None) -> None:
+                   enable_console_logging: bool | None = None,
+                   enable_file_logging: bool | None = None,
+                   ) -> None:
         """
         Reconfigure the logging system.
 
@@ -140,8 +144,10 @@ class LoggerFactory:
 
         if log_level:
             self.log_level = log_level
-        if enable_console is not None:
-            self.enable_console = enable_console
+        if enable_console_logging != None:
+            self.enable_console_logging = enable_console_logging
+        if enable_file_logging != None:
+            self.enable_file_logging = enable_file_logging
 
         # Reconfigure root logger
         self._configure_root_logger()
@@ -177,11 +183,13 @@ def get_log_file_path() -> str:
     return _factory.get_log_file_path()
 
 
-def configure_logging(
+def configure_logger(
         log_file_path: str | None = None,
         log_file_prefix: str | None = None,
         log_level: int | None = None,
-        enable_console: bool | None = None) -> None:
+        enable_console_logging: bool | None = None,
+        enable_file_logging: bool | None = None,
+        ) -> None:
     """
     Reconfigure the logging system.
 
@@ -190,4 +198,10 @@ def configure_logging(
         log_level: New log level
         enable_console: Whether to enable console logging
     """
-    _factory.configure(log_file_path, log_file_prefix, log_level, enable_console)
+    _factory.configure(
+        log_dir=log_file_path,
+        log_file_prefix=log_file_prefix,
+        log_level=log_level,
+        enable_console_logging=enable_console_logging,
+        enable_file_logging=enable_file_logging,
+        )
