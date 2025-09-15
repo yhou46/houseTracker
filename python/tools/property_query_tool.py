@@ -13,8 +13,9 @@ import sys
 
 from shared.iproperty import IProperty
 from shared.iproperty_address import IPropertyAddress, InvalidAddressError
-from data_service.dynamodb_property_service import DynamoDBPropertyService
 import shared.logger_factory as logger_factory
+
+from data_service.dynamodb_property_service import DynamoDBPropertyService
 
 
 def setup_logging() -> logging.Logger:
