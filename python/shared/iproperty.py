@@ -6,9 +6,9 @@ from decimal import Decimal
 from typing import Any
 
 import uuid
-import logging
 
 from shared.iproperty_address import IPropertyAddress
+from shared.logger_factory import get_logger
 
 
 class AreaUnit(Enum):
@@ -481,7 +481,9 @@ class IProperty():
             property1: First IProperty object to compare
             property2: Second IProperty object to compare
         """
-        print("=== Comparing IProperty objects ===")
+        logger = get_logger("shared.iproperty")
+        diff_result_str = ""
+        diff_result_str += "=== Comparing IProperty objects ===\n"
 
         # Compare metadata fields
         meta1 = property1.metadata
@@ -489,35 +491,35 @@ class IProperty():
 
         # Address comparison
         if meta1.address != meta2.address:
-            print(f"Address is different: {meta1.address} != {meta2.address}")
+            diff_result_str += f"Address is different: {meta1.address} != {meta2.address}\n"
 
         # Area comparison
         if meta1.area != meta2.area:
-            print(f"Area is different: {meta1.area} != {meta2.area}")
+            diff_result_str += f"Area is different: {meta1.area} != {meta2.area}\n"
 
         # Property type comparison
         if meta1.property_type != meta2.property_type:
-            print(f"Property type is different: {meta1.property_type.value} != {meta2.property_type.value}")
+            diff_result_str += f"Property type is different: {meta1.property_type.value} != {meta2.property_type.value}\n"
 
         # Lot area comparison
         if meta1.lot_area != meta2.lot_area:
-            print(f"Lot area is different: {meta1.lot_area} != {meta2.lot_area}")
+            diff_result_str += f"Lot area is different: {meta1.lot_area} != {meta2.lot_area}\n"
 
         # Number of bedrooms comparison
         if meta1.number_of_bedrooms != meta2.number_of_bedrooms:
-            print(f"Number of bedrooms is different: {meta1.number_of_bedrooms} != {meta2.number_of_bedrooms}")
+            diff_result_str += f"Number of bedrooms is different: {meta1.number_of_bedrooms} != {meta2.number_of_bedrooms}\n"
 
         # Number of bathrooms comparison
         if meta1.number_of_bathrooms != meta2.number_of_bathrooms:
-            print(f"Number of bathrooms is different: {meta1.number_of_bathrooms} != {meta2.number_of_bathrooms}")
+            diff_result_str += f"Number of bathrooms is different: {meta1.number_of_bathrooms} != {meta2.number_of_bathrooms}\n"
 
         # Year built comparison
         if meta1.year_built != meta2.year_built:
-            print(f"Year built is different: {meta1.year_built} != {meta2.year_built}")
+            diff_result_str += f"Year built is different: {meta1.year_built} != {meta2.year_built}\n"
 
         # Status comparison
         if meta1.status != meta2.status:
-            print(f"Status is different: {meta1.status.value} != {meta2.status.value}")
+            diff_result_str += f"Status is different: {meta1.status.value} != {meta2.status.value}\n"
 
         # Price comparison (handle None values and Decimaling point precision)
         price1 = meta1.price
@@ -525,41 +527,42 @@ class IProperty():
         if price1 is None and price2 is None:
             pass  # Both None, no difference
         elif price1 is None or price2 is None:
-            print(f"Price is different: {price1} != {price2}")
+            diff_result_str += f"Price is different: {price1} != {price2}\n"
         elif not math.isclose(price1, price2):
-            print(f"Price is different: {price1} != {price2}")
+            diff_result_str += f"Price is different: {price1} != {price2}\n"
 
         # Last updated comparison
         if meta1.last_updated != meta2.last_updated:
-            print(f"Last updated is different: {meta1.last_updated} != {meta2.last_updated}")
+            diff_result_str += f"Last updated is different: {meta1.last_updated} != {meta2.last_updated}\n"
 
         # Data sources comparison
         if meta1.data_sources != meta2.data_sources:
-            print(f"Data sources are different:")
-            print(f"  Property1 sources: {[str(source) for source in meta1.data_sources]}")
-            print(f"  Property2 sources: {[str(source) for source in meta2.data_sources]}")
+            diff_result_str += f"Data sources are different:\n"
+            diff_result_str += f"  Property1 sources: {[str(source) for source in meta1.data_sources]}\n"
+            diff_result_str += f"  Property2 sources: {[str(source) for source in meta2.data_sources]}\n"
 
         # History comparison
         history1 = property1.history
         history2 = property2.history
 
         if history1.address != history2.address:
-            print(f"History address is different: {history1.address} != {history2.address}")
+            diff_result_str += f"History address is different: {history1.address} != {history2.address}\n"
 
         if history1.last_updated != history2.last_updated:
-            print(f"History last updated is different: {history1.last_updated} != {history2.last_updated}")
+            diff_result_str += f"History last updated is different: {history1.last_updated} != {history2.last_updated}\n"
 
         if len(history1.history) != len(history2.history):
-            print(f"History count is different: {len(history1.history)} != {len(history2.history)}")
+            diff_result_str += f"History count is different: {len(history1.history)} != {len(history2.history)}\n"
         else:
             # Compare individual history events
             for i, (event1, event2) in enumerate(zip(history1.history, history2.history)):
                 if event1 != event2:
-                    print(f"History event {i} is different:")
-                    print(f"  Event1: {event1}")
-                    print(f"  Event2: {event2}")
+                    diff_result_str += f"History event {i} is different:\n"
+                    diff_result_str += f"  Event1: {event1}\n"
+                    diff_result_str += f"  Event2: {event2}\n"
 
-        print("=== Comparison complete ===")
+        diff_result_str += "=== Comparison complete ==="
+        logger.info(diff_result_str)
 
 # def merge_property(
 #     property1: IProperty,

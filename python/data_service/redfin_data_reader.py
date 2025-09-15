@@ -2,14 +2,23 @@ from typing import Iterator, Callable, Any, Dict, Tuple
 from enum import Enum
 import json
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import os
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from crawler.redfin_spider.items import RedfinPropertyItem
-from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
-
+from shared.iproperty import (
+    PropertyArea,
+    AreaUnit,
+    PropertyType,
+    PropertyStatus,
+    IPropertyDataSource,
+    IPropertyHistory,
+    PropertyHistoryEventType,
+    IPropertyHistoryEvent,
+    IPropertyMetadata,
+)
 from shared.iproperty_address import IPropertyAddress, InvalidAddressError
 
 class RedfinPropertyEntryTypeCheck:
