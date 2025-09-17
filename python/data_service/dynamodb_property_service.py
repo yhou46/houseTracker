@@ -5,9 +5,7 @@ from typing import (
     Any,
     Tuple,
 )
-from datetime import datetime, timezone
-import json
-import logging
+from datetime import datetime
 from enum import Enum
 import os
 from decimal import Decimal
@@ -834,81 +832,6 @@ def run_read_test(table_name: str, region: str, property_id: str) -> None:
     else:
         print(f"Property with ID {property_id} not found")
 
-def store_property_from_file(filename: str, table_name: str, region: str, max_update_count: int | None) -> None:
-    """
-    Store properties from a file into DynamoDB.
-
-    Args:
-        filename (str): The path to the file containing property data.
-        table_name (str): The name of the DynamoDB table.
-        region (str): The AWS region where the DynamoDB table is located.
-    """
-    # Set up logging
-    logger = logger_factory.get_logger(__name__)
-
-    # Get the directory of the current script (data_reader.py)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Go up two levels to the project root, then into redfin_output
-    python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    property_data_file = os.path.join(python_project_folder, "crawler", "redfin_output", filename)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
-
-    logger.info(f"Starting to read Redfin data from {property_data_file}. Error file: {error_log_file}")
-
-    with open(error_log_file, 'w', encoding='utf-8') as error_file:
-        def file_error_handler(error: PropertyDataStreamParsingError) -> None:
-            error_msg = f"{datetime.now().isoformat()} - {str(error)}\n"
-            error_file.write(error_msg)
-            error_file.flush()
-
-        reader: IPropertyDataStream = RedfinFileDataReader(property_data_file, file_error_handler)
-        dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
-
-        count = 0
-        logger.info("Start to save property to DynamoDB")
-        for metadata, history in reader:
-            logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
-
-            # Update or create property
-            dynamoDbService.create_or_update_property(metadata, history)
-
-            count += 1
-            if max_update_count and count >= max_update_count:
-                logger.info(f"Reached max update count: {max_update_count}, stop processing further")
-                break
-            if count % 100 == 0:
-                sleep_seconds = 5
-                logger.info(f"Processed count: {count}, sleep for {sleep_seconds} seconds")
-                time.sleep(sleep_seconds)
-        logger.info(f"Finished processing. Total properties processed: {count}, reader errors logged to {error_log_file}, service log file: {logger_factory.get_log_file_path()}")
-
-# # Configure logging to write to both console and file
-# def setup_logging() -> str:
-#     """Set up logging configuration to write to both console and file."""
-#     # Create logs directory if it doesn't exist
-#     current_dir = os.path.dirname(os.path.abspath(__file__))
-#     logs_dir = os.path.join(current_dir, "logs")
-#     os.makedirs(logs_dir, exist_ok=True)
-
-#     # Create log filename with timestamp
-#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#     log_filename = os.path.join(logs_dir, f"dynamodb_service_{timestamp}.log")
-
-#     # Configure root logger
-#     logging.basicConfig(
-#         level=logging.INFO,
-#         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#         handlers=[
-#             logging.StreamHandler(),  # Console handler
-#             logging.FileHandler(log_filename)  # File handler
-#         ]
-#     )
-
-#     return log_filename
-
 if __name__ == "__main__":
     # Logging is already configured at module level
     # Set up logging when module is imported
@@ -924,14 +847,7 @@ if __name__ == "__main__":
     region = "us-west-2"
 
     # Input file
-    file_name = "redfin_properties_20250723_173800.jsonl"
-
-    # Read from file and save to DynamoDB
-    store_property_from_file(
-        file_name, table_name,
-        region,
-        max_update_count=None,
-        )
+    file_name = "redfin_properties_20250801_181829.jsonl"
 
     # Write test
     # run_save_test(table_name, region)
