@@ -494,6 +494,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         status = PropertyStatus.Pending
     elif redfin_data.status == "Sold":
         status = PropertyStatus.Sold
+    # TODO: add off market status?
     else:
         error_msg = f"Unknown property status: {redfin_data.status} for address: {redfin_data.address}"
         raise PropertyDataStreamParsingError(

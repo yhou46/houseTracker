@@ -270,6 +270,7 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
             return 'Pending'
         elif any(keyword in status_lower for keyword in ['sold', 'closed', 'sale closed']):
             return 'Sold'
+        # TODO: add off market status?
 
         return None
 
