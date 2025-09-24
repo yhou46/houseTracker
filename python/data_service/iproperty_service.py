@@ -48,6 +48,58 @@ class PropertyQueryPattern:
         self.number_of_bedrooms_range = number_of_bedrooms_range
         self.number_of_bathrooms_range = number_of_bathrooms_range
 
+    def __str__(self) -> str:
+        parts = []
+
+        # State (required)
+        parts.append(f"State: {self.state}")
+
+        # Location criteria (zip codes and cities)
+        location_parts = []
+        if self.zip_code_list:
+            location_parts.append(f"Zip codes: {self.zip_code_list}")
+        if self.city_list:
+            location_parts.append(f"Cities: {self.city_list}")
+        if location_parts:
+            parts.append(f"Location: {' OR '.join(location_parts)}")
+
+        # Property type
+        if self.property_type_list:
+            type_values = [pt.value for pt in self.property_type_list]
+            parts.append(f"Property types: {type_values}")
+
+        # Status
+        if self.status_list:
+            status_values = [s.value for s in self.status_list]
+            parts.append(f"Statuses: {status_values}")
+
+        # Event types
+        if self.event_type_list:
+            event_values = [et.value for et in self.event_type_list]
+            parts.append(f"Event types: {event_values}")
+
+        # Time range for events
+        if self.even_type_time_range:
+            start_time, end_time = self.even_type_time_range
+            parts.append(f"Event time range: {start_time.isoformat()} to {end_time.isoformat()}")
+
+        # Price range
+        if self.price_range:
+            min_price, max_price = self.price_range
+            parts.append(f"Price range: ${min_price} - ${max_price}")
+
+        # Bedrooms range
+        if self.number_of_bedrooms_range:
+            min_bed, max_bed = self.number_of_bedrooms_range
+            parts.append(f"Bedrooms range: {min_bed} - {max_bed}")
+
+        # Bathrooms range
+        if self.number_of_bathrooms_range:
+            min_bath, max_bath = self.number_of_bathrooms_range
+            parts.append(f"Bathrooms range: {min_bath} - {max_bath}")
+
+        return "PropertyQueryPattern(" + ", ".join(parts) + ")"
+
 type IPropertyServiceLastEvaluateKeyType = Any
 
 class IPropertyService(ABC):
@@ -67,7 +119,7 @@ class IPropertyService(ABC):
     def query_properties(
         self,
         query: PropertyQueryPattern,
-        limit: int,
+        limit: int | None,
         exclusive_start_key: IPropertyServiceLastEvaluateKeyType,
         ) -> Tuple[List[IProperty], IPropertyServiceLastEvaluateKeyType | None]:
         """

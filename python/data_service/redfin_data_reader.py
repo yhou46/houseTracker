@@ -1,4 +1,4 @@
-from typing import Iterator, Callable, Any, Dict, Tuple
+from typing import Iterator, Callable, Any, Dict, Tuple, cast
 from enum import Enum
 import json
 import uuid
@@ -366,20 +366,23 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
 
 def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyHistory]:
     data = json.loads(line)
+    return parse_json_to_property(data)
+
+def parse_json_to_property(json_object: Dict[str, Any]) -> Tuple[IPropertyMetadata, IPropertyHistory]:
     redfin_data = RedfinPropertyEntry(
-        url=data.get('url'),
-        redfinId=data.get('redfinId'),
-        scrapedAt=data.get('scrapedAt'),
-        address=data.get('address'),
-        area=data.get('area'),
-        propertyType=data.get('propertyType'),
-        lotArea=data.get('lotArea'),
-        numberOfBedrooms=data.get('numberOfBedroom'),
-        numberOfBathrooms=data.get('numberOfBathroom'),
-        yearBuilt=data.get('yearBuilt', None),
-        status=data.get('status', 'Unknown'),
-        price=data.get('price', None),
-        readyToBuildTag=data.get('readyToBuildTag', None),
+        url = cast(str, json_object.get('url')),
+        redfinId = cast(str, json_object.get('redfinId')),
+        scrapedAt = cast(str,json_object.get('scrapedAt')),
+        address = cast(str,json_object.get('address')),
+        area = cast(str, json_object.get('area')),
+        propertyType = cast(str, json_object.get('propertyType')),
+        lotArea = json_object.get('lotArea'),
+        numberOfBedrooms=json_object.get('numberOfBedroom'),
+        numberOfBathrooms=json_object.get('numberOfBathroom'),
+        yearBuilt=json_object.get('yearBuilt', None),
+        status=json_object.get('status', 'Unknown'),
+        price=json_object.get('price', None),
+        readyToBuildTag=json_object.get('readyToBuildTag', None),
     )
 
     property_id = str(uuid.uuid4())
@@ -406,7 +409,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
 
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyType,
             error_data = redfin_data.propertyType,
         )
@@ -415,7 +418,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Vacant land property detected: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.VacantLandEncountered,
             error_data=None,
         )
@@ -431,7 +434,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Invalid area format: {redfin_data.area} for address: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
             error_data = redfin_data.area,
         )
@@ -446,7 +449,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Unknown area unit: {area_parts[1]} for address: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.UnknownAreaUnit,
             error_data = area_parts[1],
         )
@@ -460,7 +463,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
             error_msg = f"Invalid lot area format: {redfin_data.lotArea} for address: {redfin_data.address}"
             raise PropertyDataStreamParsingError(
                 message = error_msg,
-                original_data=line,
+                original_data=json.dumps(json_object),
                 error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
                 error_data = redfin_data.lotArea,
             )
@@ -476,7 +479,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
             error_msg = f"Unknown lot area unit: {lot_area_parts[1]} for address: {redfin_data.address}"
             raise PropertyDataStreamParsingError(
                 message = error_msg,
-                original_data=line,
+                original_data=json.dumps(json_object),
                 error_code = PropertyDataStreamParsingErrorCode.UnknownAreaUnit,
                 error_data = lot_area_parts[1],
             )
@@ -499,7 +502,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Unknown property status: {redfin_data.status} for address: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyStatus,
             error_data = redfin_data.status,
         )
@@ -524,7 +527,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Number of bedrooms and bathrooms must be provided for non-vacant land properties: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.MissingRequiredField,
             error_data = {
                 "propertyType": property_type,
@@ -534,7 +537,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         )
 
     # Parse property history
-    history = parse_property_history(data, property_id, address, last_updated)
+    history = parse_property_history(json_object, property_id, address, last_updated)
 
     # Legacy data doesn't have price
     if price is None and len(history.history) > 0:
