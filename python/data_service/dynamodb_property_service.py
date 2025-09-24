@@ -681,10 +681,11 @@ class DynamoDBPropertyService(IPropertyService):
             self.logger.error(f"Error deleting property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
 
+    #TODO: the exclusive_start_key is not well defined. One example: if we already queried one status and just need to complete the next status, then this argument won't work
     def query_properties(
         self,
         query: PropertyQueryPattern,
-        limit: int,
+        limit: int | None = None,
         exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
         ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
 
@@ -694,7 +695,38 @@ class DynamoDBPropertyService(IPropertyService):
         if query.state != "WA":
             raise ValueError(f"Invalid state: {query.state}. States other than WA is not supported")
 
-        raise NotImplementedError("Method not implemented yet")
+        if not query.status_list:
+            error_msg = f"Status cannot be empty for query: {query}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # TODO: remove below check after fix last evaludate key issue
+        if len(query.status_list) > 1:
+            error_msg = "status list should not exceed 1"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        result_count = 0
+        result_list = []
+        last_evaluated_key = exclusive_start_key
+        for property_status in query.status_list:
+            temp_limit = None if limit == None else limit - result_count
+            if temp_limit != None and temp_limit <= 0:
+                break
+            properties, last_evaluated_key = self._query_properties_with_status_gsi(
+                status=property_status,
+                query=query,
+                limit=temp_limit,
+                exclusive_start_key=last_evaluated_key,
+            )
+            result_list.extend(properties)
+            result_count = len(result_list)
+
+            if last_evaluated_key != None:
+                break
+
+
+        return result_list, last_evaluated_key
 
     def close(self) -> None:
         if self.dynamodb_client:
@@ -803,9 +835,10 @@ class DynamoDBPropertyService(IPropertyService):
 
     @staticmethod
     def _get_index_for_query(query: PropertyQueryPattern) -> DynamoDbPropertyTableGlobalSecondaryIndexName:
+        # TODO: update to use other indexes if possbile
         return DynamoDbPropertyTableGlobalSecondaryIndexName.StatusAddressPropertyTypeIndex
 
-    def _query_properties(
+    def _query_properties_with_status_gsi(
         self,
         status: PropertyStatus,
         query: PropertyQueryPattern,
@@ -817,6 +850,8 @@ class DynamoDBPropertyService(IPropertyService):
         """
 
         gsi_index = DynamoDBPropertyService._get_index_for_query(query)
+        if gsi_index != DynamoDbPropertyTableGlobalSecondaryIndexName.StatusAddressPropertyTypeIndex:
+            raise ValueError(f"Invalid GSI: {gsi_index} for this function")
         self.logger.info(f"GSI used for query: {gsi_index.value}")
         query_limit: int = limit if limit else self._query_return_limit
 
@@ -905,7 +940,17 @@ class DynamoDBPropertyService(IPropertyService):
         # TODO: use dynamodb.batch_get_item ?
         for property_id in result_property_id_list:
             property_object = self.get_property_by_id(property_id)
+
             if property_object:
+
+                # Filter based on other query filters
+                if query.price_range and property_object.price and (property_object.price < query.price_range[0] or property_object.price > query.price_range[1]):
+                    # Price not within the range, skip
+                    self.logger.info(f"Property price: {property_object.price} is not within the price range in query: {query.price_range}")
+                    continue
+
+                # TODO: add other filters
+
                 result_property_list.append(property_object)
 
         return result_property_list, cast(Mapping[str, str] | None ,last_evaluated_key)
@@ -998,7 +1043,7 @@ if __name__ == "__main__":
         zip_code_list = [98109],
         status_list = [PropertyStatus.Active],
     )
-    result = dynamoDbService._query_properties(
+    result = dynamoDbService._query_properties_with_status_gsi(
         PropertyStatus.Active,
         query,
         # limit=20,
