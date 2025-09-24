@@ -16,7 +16,13 @@ from typing import Callable, Any
 # Add the current directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from crawler.redfin_spider.redfin_parser import parse_property_page, parse_property_history, _parse_history_from_javascript, parse_property_sublinks
+from crawler.redfin_spider.redfin_parser import (
+    parse_property_page,
+    parse_property_history,
+    _parse_history_from_javascript,
+    parse_property_sublinks,
+    _parse_address_str,
+)
 
 def test_parser_with_saved_file(filename: str) -> None:
     """Test the parser using a saved HTML file."""
@@ -123,8 +129,11 @@ if __name__ == "__main__":
     filename = "playwright_test_output_20250906_203049.html"  # Replace with your saved file name
     # test_parser_with_saved_file(filename)
 
+    url = "https://www.redfin.com/WA/Seattle/655-Crockett-St-98109/unit-B405/home/2067966"
     # Test with live URL (uncomment to test)
     def function_callback(html_str: str) -> None:
-        links = parse_property_sublinks(html_str)
-        print(f"Extracted {len(links)} property links:")
-    test_parser_with_url("https://www.redfin.com/zipcode/98109", function_callback)
+        soup = BeautifulSoup(html_str, "html.parser")
+        address = _parse_address_str(soup)
+
+        print(address)
+    test_parser_with_url(url, function_callback)

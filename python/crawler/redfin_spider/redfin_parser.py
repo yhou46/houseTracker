@@ -11,6 +11,8 @@ from typing import Dict, Any, Optional, List, Set
 from bs4 import BeautifulSoup
 import json
 
+from shared.iproperty_address import get_address_components
+
 # Set up logging
 import logging
 logger = logging.getLogger(__name__)
@@ -88,11 +90,7 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
     }
 
     # Parse address from title
-    title = soup.title
-    if title and title.string:
-        parts = title.string.split("|")
-        if len(parts) >= 2:
-            result['address'] = parts[0].strip()
+    result["address"] = _parse_address_str(soup)
 
     # Parse bedrooms and bathrooms
     beds = parse_meta_tag(soup, "twitter:text:beds")
@@ -212,6 +210,41 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
     result.update(property_history)
 
     return result
+
+def _parse_address_str(beautiful_soup: BeautifulSoup) -> str:
+
+    # Try parse using the tag
+    html_address_class_name = "full-address addressBannerRevamp street-address"
+    address_tag = beautiful_soup.find("h1", class_=html_address_class_name)
+    if address_tag:
+        address = address_tag.get_text(strip=True)
+
+        try:
+            # Try parsing address
+            get_address_components(address)
+            return address
+        except Exception as error:
+            # Failed to parse the address
+            logger.warning(f"Faled to parse address using the tag: {html_address_class_name}")
+
+    # Try parse using the title
+    title = beautiful_soup.title
+    if title and title.string:
+        parts = title.string.split("|")
+
+        address = parts[0].strip() if len(parts) >= 2 else ""
+        if not address:
+            logger.error(f"Failed to parse address using title. title: {title} is invalid")
+
+        try:
+            # Try parsing address
+            get_address_components(address)
+            return address
+        except Exception as error:
+            # Failed to parse the address
+            logger.warning(f"Faled to parse address using the tag: {html_address_class_name}")
+
+    raise ValueError("Failed to parse address from html page")
 
 # Example url: https://www.redfin.com/WA/Redmond/Redmond/Plan-2C/home/188825778
 def _parse_property_ready_to_build_tag(beautiful_soup: BeautifulSoup) -> bool:
