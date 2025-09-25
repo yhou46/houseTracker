@@ -89,8 +89,8 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
         'status': None,
     }
 
-    # Parse address from title
-    result["address"] = _parse_address_str(soup)
+    # Parse address
+    result["address"] = _parse_property_address(soup)
 
     # Parse bedrooms and bathrooms
     beds = parse_meta_tag(soup, "twitter:text:beds")
@@ -211,7 +211,7 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
 
     return result
 
-def _parse_address_str(beautiful_soup: BeautifulSoup) -> str:
+def _parse_property_address(beautiful_soup: BeautifulSoup) -> str:
 
     # Try parse using the tag
     html_address_class_name = "full-address addressBannerRevamp street-address"
@@ -242,7 +242,8 @@ def _parse_address_str(beautiful_soup: BeautifulSoup) -> str:
             return address
         except Exception as error:
             # Failed to parse the address
-            logger.warning(f"Faled to parse address using the tag: {html_address_class_name}")
+            logger.warning(f"Faled to parse address using the title: {title}")
+        return address
 
     raise ValueError("Failed to parse address from html page")
 
@@ -284,61 +285,22 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
     Returns:
         Property status normalized to "Active", "Pending", "Sold", or None if not found
     """
-    def normalize_status(raw_status: str) -> Optional[str]:
-        """
-        Normalize raw status text to standard values.
 
-        Args:
-            raw_status: Raw status text from HTML
+    # Parse use selectors
+    selectors = [
+        ".ListingStatusBannerSection",
+        ".rental-status",
+    ]
 
-        Returns:
-            Normalized status: "Active", "Pending", "Sold", or None
-        """
-        status_lower = raw_status.lower().strip()
+    for selector in selectors:
+        status_banner = beautiful_soup.select_one(selector)
+        if status_banner:
+            status_text = status_banner.get_text(strip=True)
+            if status_text:
+                logger.info(f"Found status: {status_text} with selector: {selector}")
+                return status_text.lower().strip()
 
-        # Map various status texts to our three standard values
-        if any(keyword in status_lower for keyword in ['for sale', 'active', 'listed', 'on market']):
-            return 'Active'
-        elif any(keyword in status_lower for keyword in ['pending', 'under contract', 'contingent']):
-            return 'Pending'
-        elif any(keyword in status_lower for keyword in ['sold', 'closed', 'sale closed']):
-            return 'Sold'
-        # TODO: add off market status?
-
-        return None
-
-    # Look for status in ListingStatusBannerSection
-    status_banner = beautiful_soup.select_one('.ListingStatusBannerSection')
-    if status_banner:
-        status_text = status_banner.get_text(strip=True)
-        if status_text:
-            logger.info("Found status banner")
-            normalized = normalize_status(status_text)
-            if normalized:
-                return normalized
-
-    # Fallback: Look for status in the property history (most recent event)
-    history_events = _parse_history_from_javascript(beautiful_soup)
-    if not history_events:
-        history_events = _parse_history_from_html(beautiful_soup)
-
-    logger.warning("Fallback: checking property history to get status")
-    if history_events:
-        # Check the most recent event description for status clues
-        latest_event = history_events[0]  # Assuming events are ordered by date
-        description = latest_event.get('description', '').lower()
-
-        if 'sold' in description:
-            logger.info("Method 6 working - found SOLD in history")
-            return 'Sold'
-        elif any(keyword in description for keyword in ['listed', 'for sale']):
-            logger.info("Method 6 working - found Active status in history")
-            return 'Active'
-        elif 'pending' in description:
-            logger.info("Method 6 working - found Pending status in history")
-            return 'Pending'
-
-    return None
+    raise ValueError(f"Failed to parse property status")
 
 def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
     """
