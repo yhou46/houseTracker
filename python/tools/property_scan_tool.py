@@ -31,6 +31,7 @@ from data_service.redfin_data_reader import (
     parse_property_status,
 )
 
+# TODO: add this function to status parsing function in iproperty?
 def analyze_property_status(status_str: str, history: IPropertyHistory) -> PropertyStatus:
     logger = logger_factory.get_logger(__name__)
     try:
@@ -193,7 +194,7 @@ def scan_and_update(
 
     logger.info(f"Total processed count: {processed_count}")
 
-
+# TODO: probably don't need query but just status? refactor to scan for multiptle status
 def scan_and_update2(
         query: PropertyQueryPattern,
         property_id_file: str | None = None,
