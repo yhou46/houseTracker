@@ -806,6 +806,7 @@ class DynamoDBPropertyService(IPropertyService):
 
         items_to_be_updated = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
 
+        # TODO: use the _write_items function?
         try:
             with self.table.batch_writer() as writer:
                 # Overwrite with new metadata
@@ -869,6 +870,7 @@ class DynamoDBPropertyService(IPropertyService):
         result_property_id_list = []
         while True:
             if last_evaluated_key:
+                self.logger.info(f"_query_properties_with_status_gsi: while loop, last_evaluated_key: {last_evaluated_key}")
                 response = self.table.query(
                     IndexName = gsi_index.value,
                     KeyConditionExpression =
@@ -878,6 +880,7 @@ class DynamoDBPropertyService(IPropertyService):
                     ExclusiveStartKey=last_evaluated_key,
                 )
             else:
+                self.logger.info(f"_query_properties_with_status_gsi: while loop, no last_evaluated_key")
                 response = self.table.query(
                     IndexName = gsi_index.value,
                     KeyConditionExpression =
@@ -925,19 +928,17 @@ class DynamoDBPropertyService(IPropertyService):
 
             if not last_evaluated_key:
                 break
-            if len(result_property_id_list) > query_limit:
-                self.logger.info(f"Quit earlier since limit exceeded, last evalulated key: f{last_evaluated_key}")
+            if len(result_property_id_list) >= query_limit:
+                self.logger.info(f"Quit earlier since limit exceeded, last evalulated key: f{last_evaluated_key}, result count: {len(result_property_id_list)}, query limit: {query_limit}")
                 break
 
         self.logger.info(
             f"query result count: {len(result_property_id_list)}"
         )
-        self.logger.info(
-            f"query result: {result_property_id_list}"
-        )
 
         result_property_list: List[IProperty] = []
         # TODO: use dynamodb.batch_get_item ?
+        self.logger.info(f"query for property details...")
         for property_id in result_property_id_list:
             property_object = self.get_property_by_id(property_id)
 

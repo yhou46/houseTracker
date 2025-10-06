@@ -42,15 +42,16 @@ class PropertyType(Enum):
 class PropertyHistoryEventType(Enum):
     Listed = "Listed"
     ReListed = "ReListed"
-    DeListed = "DeListed"
+    DeListed = "DeListed" # DeListed, property sold and then off market?
     Pending = "Pending"
     PriceChange = "PriceChange"
     Sold = "Sold"
     Contingent = "Contingent"
     ListedForRent = "ListedForRent"
     RentalRemoved = "RentalRemoved"
-    ListRemoved = "ListRemoved"
+    ListRemoved = "ListRemoved" # ListRemoved, property not sold and off market?
     Other = "Other"
+    # TODO: what is the diff of DeListed vs ListRemoved, how to handle rental events
 
 class IPropertyHistoryEvent:
     def __init__(
@@ -247,9 +248,15 @@ class IPropertyHistory:
         return True
 
 class PropertyStatus(Enum):
+    # Property selling status
     Active = "Active"
     Pending = "Pending"
     Sold = "Sold"
+    ListRemoved = "ListRemoved" # It means the property was listed but not sold, then withdrawn by owner
+
+    # Property rental status
+    ActiveForRental = "ActiveForRental"
+    RentalRemoved = "RentalRemoved" # It means the property was listed for rent then withdrawn by owner
 
 class IPropertyDataSource:
     def __init__(self, source_id: str, source_url: str, source_name: str):
@@ -340,6 +347,14 @@ class IPropertyMetadata(IPropertyBasic):
     @property
     def data_sources(self) -> List[IPropertyDataSource]:
         return self._data_sources
+
+    def update_status(self, new_status: PropertyStatus) -> None:
+        if new_status != self._status:
+            self._status = new_status
+            self._last_updated = datetime.now(timezone.utc)
+
+    def update_price(self, price: Decimal | None) -> None:
+        self._price = price
 
     def is_equal(
         self,

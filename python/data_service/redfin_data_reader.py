@@ -294,14 +294,29 @@ _property_status_value_map: Dict[str, PropertyStatus] = {
     # Sold status
     "sold": PropertyStatus.Sold,
 
+    # Off market status, not sold but withdrawn by owner
+    "off market": PropertyStatus.ListRemoved,
+
     # Rental removed
     "rental removed": PropertyStatus.RentalRemoved,
+
+    # Rental listed
+    "for rent": PropertyStatus.ActiveForRental,
 }
 
 def parse_property_status(status_str: str) -> PropertyStatus:
-    status = _property_status_value_map.get(status_str)
+
+    # Handle cases like "pending - backup offer requested"
+    entries = status_str.split("-")
+    status = _property_status_value_map.get(entries[0].strip())
+
+    if status:
+        return status
 
     if not status:
+        if status_str.startswith(PropertyStatus.Sold.value):
+            return PropertyStatus.Sold
+
         error_msg = f"Unknown property status: {status_str}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
@@ -338,10 +353,15 @@ def parse_property_history(data: Dict[str, Any], address: IPropertyAddress, last
             raise ValueError("Event description is missing or not a string")
 
         if description.lower().startswith("listed"):
-            event_type = PropertyHistoryEventType.Listed
+            # Found rent related events
+            if description.lower().find("rent") != -1:
+                event_type = PropertyHistoryEventType.ListedForRent
+            else:
+                event_type = PropertyHistoryEventType.Listed
         elif description.lower().startswith("sold"):
             event_type = PropertyHistoryEventType.Sold
         elif description.lower().startswith("price changed"):
+            # TODO: need to tell between sale and rent
             event_type = PropertyHistoryEventType.PriceChange
         elif description.lower().startswith("pending"):
             event_type = PropertyHistoryEventType.Pending
