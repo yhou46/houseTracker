@@ -1,8 +1,16 @@
-from typing import Iterator, Callable, Any, Dict, Tuple, cast
+from typing import (
+    Iterator,
+    Callable,
+    Any,
+    Dict,
+    Set,
+    Tuple,
+    cast,
+)
 from enum import Enum
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -304,7 +312,7 @@ _property_status_value_map: Dict[str, PropertyStatus] = {
     "for rent": PropertyStatus.ActiveForRental,
 }
 
-def parse_property_status(status_str: str) -> PropertyStatus:
+def parse_property_status(status_str: str, history: IPropertyHistory) -> PropertyStatus:
 
     # Handle cases like "pending - backup offer requested"
     entries = status_str.split("-")
@@ -317,14 +325,63 @@ def parse_property_status(status_str: str) -> PropertyStatus:
         if status_str.startswith(PropertyStatus.Sold.value):
             return PropertyStatus.Sold
 
-        error_msg = f"Unknown property status: {status_str}"
-        raise PropertyDataStreamParsingError(
-            message = error_msg,
-            original_data=status_str,
-            error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyStatus,
-            error_data = status_str,
-        )
-    return status
+        # use history to determine the status
+        history_events = history.history
+        if status_str.startswith("off market— sold"):
+            """
+            Example: https://www.redfin.com/WA/Bellevue/14651-NE-40th-St-98007/unit-C4/home/25631
+            This one's redfin status is OFF MARKET— SOLD JUL 2021 FOR $525,000, but was listed before in DB record, in this case, the status should be list removed, which mean the property is not sold and withdraw by the owner
+            """
+            event_type_set: Set[PropertyHistoryEventType] = {
+                PropertyHistoryEventType.Listed,
+                PropertyHistoryEventType.ReListed,
+                PropertyHistoryEventType.DeListed,
+                PropertyHistoryEventType.PriceChange,
+                PropertyHistoryEventType.RentalRemoved,
+                PropertyHistoryEventType.ListRemoved,
+            }
+            if len(history_events) > 0 and (history_events[-1].event_type in event_type_set):
+                return PropertyStatus.ListRemoved
+
+        # Handle cases like "soldon aug 5, 2025"
+        if status_str.startswith("sold"):
+            event_type_set_for_sold: Set[PropertyHistoryEventType] = {
+                PropertyHistoryEventType.Sold,
+                PropertyHistoryEventType.DeListed,
+            }
+            if len(history_events) > 0:
+                if history_events[-1].event_type in event_type_set_for_sold:
+                    return PropertyStatus.Sold
+
+                if history_events[-1].event_type == PropertyHistoryEventType.Pending:
+                    two_days = timedelta(days=2)
+                    # Check previous event if it is sold; Sometimes pending event is added after sold event
+                    # If pending and sold event are within 2 days, consider it as sold
+                    if len(history_events) > 1 and history_events[-2].event_type == PropertyHistoryEventType.Sold and history_events[-1].datetime - history_events[-2].datetime < two_days:
+                        return PropertyStatus.Sold
+
+                if history_events[-1].event_type == PropertyHistoryEventType.RentalRemoved:
+                    return PropertyStatus.RentalRemoved
+
+                if history_events[-1].event_type == PropertyHistoryEventType.Listed:
+                    return PropertyStatus.ListRemoved
+
+        if status_str.startswith("closed"):
+            # Property is not in market, need to check history to determine if it is renatl or sale closed
+            for event in reversed(history_events):
+                if event.event_type == PropertyHistoryEventType.ListedForRent or event.description.lower().find("rent") != -1:
+                    return PropertyStatus.RentalRemoved
+
+                if event.event_type == PropertyHistoryEventType.Listed and event.description.lower().find("rent") == -1:
+                    return PropertyStatus.ListRemoved
+
+    error_msg = f"Failed to parse status string: {status_str}"
+    raise PropertyDataStreamParsingError(
+        message = error_msg,
+        original_data=status_str,
+        error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyStatus,
+        error_data = status_str,
+    )
 
 def parse_property_history(data: Dict[str, Any], address: IPropertyAddress, last_updated: datetime) -> IPropertyHistory:
     if not isinstance(data, dict):
@@ -536,9 +593,6 @@ def parse_json_to_property(json_object: Dict[str, Any]) -> Tuple[IPropertyMetada
     number_of_bathrooms = Decimal(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
     year_built = redfin_data.yearBuilt
 
-    # Parse status
-    status = parse_property_status(redfin_data.status)
-
     # Parse price
     price = redfin_data.price
 
@@ -570,6 +624,9 @@ def parse_json_to_property(json_object: Dict[str, Any]) -> Tuple[IPropertyMetada
 
     # Parse property history
     history = parse_property_history(json_object, address, last_updated)
+
+    # Parse status
+    status = parse_property_status(redfin_data.status, history)
 
     # Legacy data doesn't have price
     if price is None and len(history.history) > 0:

@@ -31,66 +31,6 @@ from data_service.redfin_data_reader import (
     parse_property_status,
 )
 
-# TODO: add this function to status parsing function in iproperty?
-def analyze_property_status(status_str: str, history: IPropertyHistory) -> PropertyStatus:
-    logger = logger_factory.get_logger(__name__)
-    try:
-        status = parse_property_status(status_str)
-        return status
-    except PropertyDataStreamParsingError as error:
-        logger.info(f"Failed to parse status: {status_str} using mapping, error: {error}")
-
-    # use history to determine the status
-    history_events = history.history
-    if status_str.startswith("off market— sold"):
-        """
-        Example: https://www.redfin.com/WA/Bellevue/14651-NE-40th-St-98007/unit-C4/home/25631
-        This one's redfin status is OFF MARKET— SOLD JUL 2021 FOR $525,000, but was listed before in DB record, in this case, the status should be list removed, which mean the property is not sold and withdraw by the owner
-        """
-        event_type_set: Set[PropertyHistoryEventType] = {
-            PropertyHistoryEventType.Listed,
-            PropertyHistoryEventType.ReListed,
-            PropertyHistoryEventType.DeListed,
-            PropertyHistoryEventType.PriceChange,
-            PropertyHistoryEventType.RentalRemoved,
-            PropertyHistoryEventType.ListRemoved,
-        }
-        if len(history_events) > 0 and (history_events[-1].event_type in event_type_set):
-            return PropertyStatus.ListRemoved
-
-    if status_str.startswith("sold"):
-        event_type_set_for_sold: Set[PropertyHistoryEventType] = {
-            PropertyHistoryEventType.Sold,
-            PropertyHistoryEventType.DeListed,
-        }
-        if len(history_events) > 0:
-            if history_events[-1].event_type in event_type_set_for_sold:
-                return PropertyStatus.Sold
-
-            if history_events[-1].event_type == PropertyHistoryEventType.Pending:
-                two_days = timedelta(days=2)
-                # Check previous event if it is sold; Sometimes pending event is added after sold event
-                if len(history_events) > 1 and history_events[-2].event_type == PropertyHistoryEventType.Sold and history_events[-1].datetime - history_events[-2].datetime < two_days:
-                    return PropertyStatus.Sold
-
-        if len(history_events) > 0 and history_events[-1].event_type == PropertyHistoryEventType.RentalRemoved:
-            return PropertyStatus.RentalRemoved
-
-        if len(history_events) > 0 and history_events[-1].event_type == PropertyHistoryEventType.Listed:
-            return PropertyStatus.ListRemoved
-
-    if status_str.startswith("closed"):
-        # Property is not in market, need to check history to determine if it is renatl or sale closed
-        for event in reversed(history_events):
-            if event.event_type == PropertyHistoryEventType.ListedForRent or event.description.lower().find("rent") != -1:
-                return PropertyStatus.RentalRemoved
-
-            if event.event_type == PropertyHistoryEventType.Listed and event.description.lower().find("rent") == -1:
-                return PropertyStatus.ListRemoved
-
-
-    raise ValueError(f"Cannot determine the status of property, status_str: {status_str}, property history: {history}")
-
 def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyService) -> None:
 
     # Set up logging
@@ -126,7 +66,7 @@ def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyServi
         if not isinstance(status_raw_str, str):
             raise ValueError(f"Status: {status_raw_str} is not str")
 
-        new_status = analyze_property_status(status_raw_str, property.history)
+        new_status = parse_property_status(status_raw_str, property.history)
         if new_status != property.status:
             logger.info(f"Found status update, new status: {new_status.value}, old status: {property.status.value}")
             property.metadata.update_status(new_status)
@@ -183,7 +123,7 @@ def scan_and_update(
             processed_count += 1
             logger.info(f"Updated property count: {processed_count}")
 
-            if (index + 1) % 50 == 0:
+            if (index + 1) % 200 == 0:
                 delay_seconds = 60
                 logger.info(f"Processed count: {index + 1}, sleep for {delay_seconds} seconds")
                 time.sleep(delay_seconds)
@@ -273,7 +213,7 @@ def scan_and_update2(
                 processed_count += 1
                 logger.info(f"Updated property count: {processed_count}")
 
-                if (index + 1) % 50 == 0:
+                if (index + 1) % 200 == 0:
                     delay_seconds = 60
                     logger.info(f"Processed count: {index + 1}, sleep for {delay_seconds} seconds")
                     time.sleep(delay_seconds)
