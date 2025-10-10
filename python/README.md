@@ -88,3 +88,47 @@ mypy ./
     ```shell
     pipenv update
     ```
+
+# Design
+## Data fetch flow
+```
+StartUrls
+    |-> UrlDispatcher
+            |-> PropertyUrlQueue
+                |-> PropertyCrawler
+                    |-> RawPropertyDataQueue
+                    |       |-> DbService
+                    |               |-> Database
+                    |-> RawDataStorage
+```
+
+- StartUrls:
+Something like https://www.redfin.com/city/16163/WA/Seattle
+
+- PropertyUrlQueue
+Message queue for property URL from start URLs, one example property URL: https://www.redfin.com/WA/Seattle/\<address>/home/\<redfin id>. Property URLs can be batched in a single message.
+
+- PropertyCrawler
+Request property URL, parse into raw data and store into RawPropertyDataQueue
+
+- DbService
+Consume raw data, convert it to more structured data and store data into a DB
+
+- RawDataStorage
+Store raw data for record keeping and message playback
+
+## Data update flow for active properties in DB
+It is to get in market property and update its state.
+
+```
+Database
+    |-> ScanService
+            |-> PropertyUrlQueue
+                    |-> PropertyCrawler
+                            |-> RawPropertyDataQueue
+                                    |-> DbService
+                                            |-> Database
+```
+
+- ScanService
+Query DB to get list of in market property, request URL and update its status
