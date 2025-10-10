@@ -4,21 +4,23 @@ from typing import (
     Dict,
     Any,
     Tuple,
+    Mapping,
+    cast,
 )
-from datetime import datetime, timezone
-import json
-import logging
+from datetime import datetime
 from enum import Enum
 import os
 from decimal import Decimal
 import time
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.type_defs import (
     AttributeDefinitionTypeDef,
     KeySchemaElementTypeDef,
     GlobalSecondaryIndexTypeDef,
     GlobalSecondaryIndexOutputTypeDef,
+    TableAttributeValueTypeDef,
 )
 from mypy_boto3_dynamodb.client import DynamoDBClient
 from botocore.exceptions import ClientError
@@ -36,6 +38,7 @@ from shared.iproperty import (
     PropertyHistoryEventType,
 )
 from shared.iproperty_address import IPropertyAddress
+import shared.logger_factory as logger_factory
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
     PropertyDataStreamParsingError,
@@ -45,7 +48,7 @@ from data_service.iproperty_service import (
     IPropertyService,
     PropertyQueryPattern,
     IPropertyServiceLastEvaluateKeyType,
-    )
+)
 
 class DynamoDbPropertyTableEntityType(Enum):
     Property = "PROPERTY"
@@ -127,6 +130,22 @@ def get_sk_from_entity(
 
 def get_address_property_type_index(state: str, zip_code: str, city: str, property_type: PropertyType) -> str:
     return f"{state}#{city}#{zip_code}#{property_type.value}"
+
+def _parse_address_property_type_index(index_value: str) -> Dict[str, str | int]:
+    parts = index_value.split("#")
+    if len(parts) != 4:
+        raise ValueError(f"Invalid index value: {index_value}")
+    parsed_result: Dict[str, str | int] = {
+        "state": parts[0],
+        "city": parts[1],
+        "zip_code": int(parts[2]),
+        "property_type": parts[3]
+    }
+
+    if parsed_result.get("property_type") not in PropertyType:
+        raise ValueError(f"Invalid property type: {parsed_result.get('property_type')}")
+
+    return parsed_result
 
 def get_property_id_from_pk(pk: str) -> str:
     """
@@ -489,6 +508,8 @@ def create_dynambodb_table_for_property(
 
     print(f"Table {table_name} created successfully")
 
+type DynamoDBPropertyServiceLastEvaluatedKeyType = Mapping[str, str]
+
 class DynamoDBPropertyService(IPropertyService):
     def __init__(self, table_name: str, region_name: str = "us-west-2"):
         """
@@ -499,9 +520,7 @@ class DynamoDBPropertyService(IPropertyService):
             region_name: AWS region name
         """
         # Set up logging
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
-        self.logger.propagate = True
+        self.logger = logger_factory.get_logger(f"{__name__}.{self.__class__.__name__}")
 
         # Check if table exists
         self.table_name = table_name
@@ -510,6 +529,8 @@ class DynamoDBPropertyService(IPropertyService):
             raise ValueError(f"DynamoDB table: {table_name} does not exist in region {region_name}.")
         self.dynamodb_resource = boto3.resource('dynamodb', region_name=region_name)
         self.table = self.dynamodb_resource.Table(self.table_name)
+        self._db_query_result_limit = 500
+        self._query_return_limit = 1000
 
     """
     ===========================================
@@ -613,13 +634,13 @@ class DynamoDBPropertyService(IPropertyService):
             existing_property.update_history(property_history)
             # self.logger.info(f"Existing property info after update:\n{existing_property}\n")
 
-            # TODO: remove get call after verified the update works correctly
-            new_property = self.get_property_by_id(existing_property.id)
-            if new_property == None:
-                raise ValueError(f"new property should not be none, query id: {existing_property.id}")
-            if new_property != existing_property:
-                IProperty.compare_print_diff(new_property, existing_property)
-                self.logger.error(f"db record is not same as record in memory after DB update for property: id={new_property.id}, address={new_property.metadata.address}")
+            # Debug
+            # new_property = self.get_property_by_id(existing_property.id)
+            # if new_property == None:
+            #     raise ValueError(f"new property should not be none, query id: {existing_property.id}")
+            # if new_property != existing_property:
+            #     IProperty.compare_print_diff(new_property, existing_property)
+            #     self.logger.error(f"db record is not same as record in memory after DB update for property: id={new_property.id}, address={new_property.metadata.address}")
             new_property = existing_property
 
         else:
@@ -660,13 +681,52 @@ class DynamoDBPropertyService(IPropertyService):
             self.logger.error(f"Error deleting property with ID {property_id}: {error.response['Error']['Message']}")
             raise error
 
+    #TODO: the exclusive_start_key is not well defined. One example: if we already queried one status and just need to complete the next status, then this argument won't work
     def query_properties(
         self,
         query: PropertyQueryPattern,
-        limit: int,
-        exclusive_start_key: IPropertyServiceLastEvaluateKeyType,
-        ) -> Tuple[List[IProperty], IPropertyServiceLastEvaluateKeyType | None]:
-        raise NotImplementedError("Method not implemented yet")
+        limit: int | None = None,
+        exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
+        ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
+
+        # if not query.status:
+        #     raise NotImplementedError("Method not implemented yet")
+
+        if query.state != "WA":
+            raise ValueError(f"Invalid state: {query.state}. States other than WA is not supported")
+
+        if not query.status_list:
+            error_msg = f"Status cannot be empty for query: {query}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # TODO: remove below check after fix last evaludate key issue
+        if len(query.status_list) > 1:
+            error_msg = "status list should not exceed 1"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        result_count = 0
+        result_list = []
+        last_evaluated_key = exclusive_start_key
+        for property_status in query.status_list:
+            temp_limit = None if limit == None else limit - result_count
+            if temp_limit != None and temp_limit <= 0:
+                break
+            properties, last_evaluated_key = self._query_properties_with_status_gsi(
+                status=property_status,
+                query=query,
+                limit=temp_limit,
+                exclusive_start_key=last_evaluated_key,
+            )
+            result_list.extend(properties)
+            result_count = len(result_list)
+
+            if last_evaluated_key != None:
+                break
+
+
+        return result_list, last_evaluated_key
 
     def close(self) -> None:
         if self.dynamodb_client:
@@ -746,6 +806,7 @@ class DynamoDBPropertyService(IPropertyService):
 
         items_to_be_updated = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
 
+        # TODO: use the _write_items function?
         try:
             with self.table.batch_writer() as writer:
                 # Overwrite with new metadata
@@ -772,6 +833,131 @@ class DynamoDBPropertyService(IPropertyService):
             if event not in existing_history.history:
                 new_items.append(convert_property_history_event_to_dynamodb_item(property_id, event))
         self._write_items(new_items)
+
+    @staticmethod
+    def _get_index_for_query(query: PropertyQueryPattern) -> DynamoDbPropertyTableGlobalSecondaryIndexName:
+        # TODO: update to use other indexes if possbile
+        return DynamoDbPropertyTableGlobalSecondaryIndexName.StatusAddressPropertyTypeIndex
+
+    def _query_properties_with_status_gsi(
+        self,
+        status: PropertyStatus,
+        query: PropertyQueryPattern,
+        limit: int | None = None,
+        exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
+        ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
+        """
+        It is highly dependent on the Global Secondary Index created for the table
+        """
+
+        gsi_index = DynamoDBPropertyService._get_index_for_query(query)
+        if gsi_index != DynamoDbPropertyTableGlobalSecondaryIndexName.StatusAddressPropertyTypeIndex:
+            raise ValueError(f"Invalid GSI: {gsi_index} for this function")
+        self.logger.info(f"GSI used for query: {gsi_index.value}")
+        query_limit: int = limit if limit else self._query_return_limit
+
+        # Get sort key used for query
+        sort_key = f"{query.state}#"
+        if query.city_list and len(query.city_list) == 1:
+            sort_key += f"{query.city_list[0]}#"
+            if query.zip_code_list and len(query.zip_code_list) == 1:
+                sort_key += f"{query.zip_code_list[0]}#"
+                if query.property_type_list and len(query.property_type_list) == 1:
+                    sort_key += f"{query.property_type_list[0].value}"
+        self.logger.info(f"Sort key for query: {sort_key}")
+
+        last_evaluated_key: Mapping[str, TableAttributeValueTypeDef] | None = exclusive_start_key
+        result_property_id_list = []
+        while True:
+            if last_evaluated_key:
+                self.logger.info(f"_query_properties_with_status_gsi: while loop, last_evaluated_key: {last_evaluated_key}")
+                response = self.table.query(
+                    IndexName = gsi_index.value,
+                    KeyConditionExpression =
+                        Key(DynamoDbPropertyTableAttributeName.Status.value).eq(status.value) & \
+                        Key(DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value).begins_with(sort_key),
+                    Limit = self._db_query_result_limit,
+                    ExclusiveStartKey=last_evaluated_key,
+                )
+            else:
+                self.logger.info(f"_query_properties_with_status_gsi: while loop, no last_evaluated_key")
+                response = self.table.query(
+                    IndexName = gsi_index.value,
+                    KeyConditionExpression =
+                        Key(DynamoDbPropertyTableAttributeName.Status.value).eq(status.value) & \
+                        Key(DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value).begins_with(sort_key),
+                    Limit = self._db_query_result_limit,
+                )
+
+            items = response.get("Items")
+            if not isinstance(items, list):
+                raise ValueError(f"returned items is not List type")
+
+            # Filter out items that do not match the query
+            filtered_items = []
+            filtered_property_ids: List[str] = []
+            for item in items:
+                item_sk_value = item.get(DynamoDbPropertyTableAttributeName.AddressPropertyTypeIndex.value)
+                if not isinstance(item_sk_value, str):
+                    raise ValueError(f"sort key is not a string: {str(item_sk_value)}")
+                parsed_sk = _parse_address_property_type_index(item_sk_value)
+                if parsed_sk.get("state") != query.state:
+                    continue
+                if query.city_list and parsed_sk.get("city") not in query.city_list:
+                    continue
+                if query.zip_code_list and parsed_sk.get("zip_code") not in query.zip_code_list:
+                    continue
+                if query.property_type_list:
+                    target_property_type_str_list = [ property_type.value for property_type in query.property_type_list]
+                    if parsed_sk.get("property_type") not in target_property_type_str_list:
+                        continue
+
+                item_pk_value = item.get(DynamoDbPropertyTableAttributeName.PK.value)
+                if item_sk_value and isinstance(item_pk_value, str):
+                    item_property_id = get_property_id_from_pk(item_pk_value)
+                    filtered_property_ids.append(item_property_id)
+                else:
+                    raise ValueError(f"partition key is not a string: {str(item_pk_value)}")
+
+                filtered_items.append(item)
+
+
+            last_evaluated_key = response.get("LastEvaluatedKey")
+            self.logger.info(f"last evaludated key: {last_evaluated_key}")
+            result_property_id_list.extend(filtered_property_ids)
+
+            if not last_evaluated_key:
+                break
+            if len(result_property_id_list) >= query_limit:
+                self.logger.info(f"Quit earlier since limit exceeded, last evalulated key: f{last_evaluated_key}, result count: {len(result_property_id_list)}, query limit: {query_limit}")
+                break
+
+        self.logger.info(
+            f"query result count: {len(result_property_id_list)}"
+        )
+
+        result_property_list: List[IProperty] = []
+        # TODO: use dynamodb.batch_get_item ?
+        self.logger.info(f"query for property details...")
+        for property_id in result_property_id_list:
+            property_object = self.get_property_by_id(property_id)
+
+            if property_object:
+
+                # Filter based on other query filters
+                if query.price_range and property_object.price and (property_object.price < query.price_range[0] or property_object.price > query.price_range[1]):
+                    # Price not within the range, skip
+                    self.logger.info(f"Property price: {property_object.price} is not within the price range in query: {query.price_range}")
+                    continue
+
+                # TODO: add other filters
+
+                result_property_list.append(property_object)
+
+        return result_property_list, cast(Mapping[str, str] | None ,last_evaluated_key)
+
+
+
 
 
 def run_save_test(table_name: str, region: str) -> None:
@@ -835,100 +1021,47 @@ def run_read_test(table_name: str, region: str, property_id: str) -> None:
     else:
         print(f"Property with ID {property_id} not found")
 
-def store_property_from_file(filename: str, table_name: str, region: str, max_update_count: int | None) -> None:
-    """
-    Store properties from a file into DynamoDB.
-
-    Args:
-        filename (str): The path to the file containing property data.
-        table_name (str): The name of the DynamoDB table.
-        region (str): The AWS region where the DynamoDB table is located.
-    """
-    # Set up logging
-    root_logger = logging.getLogger()
-
-    # Get the directory of the current script (data_reader.py)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Go up two levels to the project root, then into redfin_output
-    python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
-    property_data_file = os.path.join(python_project_folder, "crawler", "redfin_output", filename)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
-
-    root_logger.info(f"Starting to read Redfin data from {property_data_file}. Error file: {error_log_file}")
-
-    with open(error_log_file, 'w', encoding='utf-8') as error_file:
-        def file_error_handler(error: PropertyDataStreamParsingError) -> None:
-            error_msg = f"{datetime.now().isoformat()} - {str(error)}\n"
-            error_file.write(error_msg)
-            error_file.flush()
-
-        reader: IPropertyDataStream = RedfinFileDataReader(property_data_file, file_error_handler)
-        dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
-
-        count = 0
-        root_logger.info("Start to save property to DynamoDB")
-        for metadata, history in reader:
-            root_logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
-
-            # Update or create property
-            dynamoDbService.create_or_update_property(metadata, history)
-
-            count += 1
-            if max_update_count and count >= max_update_count:
-                root_logger.info(f"Reached max update count: {max_update_count}, stop processing further")
-                break
-            if count % 100 == 0:
-                sleep_seconds = 5
-                root_logger.info(f"Processed count: {count}, sleep for {sleep_seconds} seconds")
-                time.sleep(sleep_seconds)
-        root_logger.info(f"Finished processing. Total properties processed: {count}, errors logged to {error_log_file}")
-
-# Configure logging to write to both console and file
-def setup_logging() -> str:
-    """Set up logging configuration to write to both console and file."""
-    # Create logs directory if it doesn't exist
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    logs_dir = os.path.join(current_dir, "logs")
-    os.makedirs(logs_dir, exist_ok=True)
-
-    # Create log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = os.path.join(logs_dir, f"dynamodb_service_{timestamp}.log")
-
-    # Configure root logger
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),  # Console handler
-            logging.FileHandler(log_filename)  # File handler
-        ]
-    )
-
-    return log_filename
-
 if __name__ == "__main__":
     # Logging is already configured at module level
     # Set up logging when module is imported
-    log_file = setup_logging()
-    print(f"Logging configured. Log file: {log_file}")
+    log_file_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    log_file_prefix = "dynamodb_service"
+    logger_factory.configure_logger(
+        log_file_path=log_file_dir,
+        log_file_prefix=log_file_prefix,
+    )
+    logger = logger_factory.get_logger(__name__)
 
     # Dynamodb set up
     table_name = "properties"
     region = "us-west-2"
 
-    # Input file
-    file_name = "redfin_properties_20250719_192955.jsonl"
+    # Query test
+    dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
+    query = PropertyQueryPattern(
+        state = "WA",
+        city_list= ["Seattle"],
+        zip_code_list = [98109],
+        status_list = [PropertyStatus.Active],
+    )
+    result = dynamoDbService._query_properties_with_status_gsi(
+        PropertyStatus.Active,
+        query,
+        # limit=20,
+    )
 
-    # Read from file and save to DynamoDB
-    store_property_from_file(
-        file_name, table_name,
-        region,
-        max_update_count=None,
-        )
+    logger.info(f"result count: {len(result[0])}")
+    logger.info(f"last evaluate key: {result[1]}")
+    properties = result[0]
+    for property in properties:
+        logger.info(property)
+
+    # test_sk = "WA#Bellevue#98007#Condo"
+    # parts = _parse_address_property_type_index(test_sk)
+    # print(parts)
+
+
+
 
     # Write test
     # run_save_test(table_name, region)

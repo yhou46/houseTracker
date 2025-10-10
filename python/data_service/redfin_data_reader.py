@@ -1,4 +1,12 @@
-from typing import Iterator, Callable, Any, Dict, Tuple
+from typing import (
+    Iterator,
+    Callable,
+    Any,
+    Dict,
+    Set,
+    Tuple,
+    cast,
+)
 from enum import Enum
 import json
 import uuid
@@ -8,8 +16,17 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from crawler.redfin_spider.items import RedfinPropertyItem
-from shared.iproperty import IProperty, PropertyArea, AreaUnit, PropertyType, PropertyStatus, IPropertyDataSource, IPropertyHistory, PropertyHistoryEventType, IPropertyHistoryEvent, IPropertyMetadata
-
+from shared.iproperty import (
+    PropertyArea,
+    AreaUnit,
+    PropertyType,
+    PropertyStatus,
+    IPropertyDataSource,
+    IPropertyHistory,
+    PropertyHistoryEventType,
+    IPropertyHistoryEvent,
+    IPropertyMetadata,
+)
 from shared.iproperty_address import IPropertyAddress, InvalidAddressError
 
 class RedfinPropertyEntryTypeCheck:
@@ -274,7 +291,99 @@ def validate_redfin_property_entry(entry: RedfinPropertyEntry) -> None:
             error_data = entry.price
         )
 
-def parse_property_history(data: Dict[str, Any], property_id: str, address: IPropertyAddress, last_updated: datetime) -> IPropertyHistory:
+# Update this map for new status string
+_property_status_value_map: Dict[str, PropertyStatus] = {
+    # Active status
+    "for sale": PropertyStatus.Active,
+
+    # Pending status
+    "pending": PropertyStatus.Pending,
+
+    # Sold status
+    "sold": PropertyStatus.Sold,
+
+    # Off market status, not sold but withdrawn by owner
+    "off market": PropertyStatus.ListRemoved,
+
+    # Rental removed
+    "rental removed": PropertyStatus.RentalRemoved,
+
+    # Rental listed
+    "for rent": PropertyStatus.ActiveForRental,
+}
+
+def parse_property_status(status_str: str, history: IPropertyHistory) -> PropertyStatus:
+
+    # Handle cases like "pending - backup offer requested"
+    entries = status_str.split("-")
+    status = _property_status_value_map.get(entries[0].strip())
+
+    if status:
+        return status
+
+    if not status:
+        if status_str.startswith(PropertyStatus.Sold.value):
+            return PropertyStatus.Sold
+
+        # use history to determine the status
+        history_events = history.history
+        if status_str.startswith("off market— sold"):
+            """
+            Example: https://www.redfin.com/WA/Bellevue/14651-NE-40th-St-98007/unit-C4/home/25631
+            This one's redfin status is OFF MARKET— SOLD JUL 2021 FOR $525,000, but was listed before in DB record, in this case, the status should be list removed, which mean the property is not sold and withdraw by the owner
+            """
+            event_type_set: Set[PropertyHistoryEventType] = {
+                PropertyHistoryEventType.Listed,
+                PropertyHistoryEventType.ReListed,
+                PropertyHistoryEventType.DeListed,
+                PropertyHistoryEventType.PriceChange,
+                PropertyHistoryEventType.RentalRemoved,
+                PropertyHistoryEventType.ListRemoved,
+            }
+            if len(history_events) > 0 and (history_events[-1].event_type in event_type_set):
+                return PropertyStatus.ListRemoved
+
+        # Handle cases like "soldon aug 5, 2025"
+        if status_str.startswith("sold"):
+            event_type_set_for_sold: Set[PropertyHistoryEventType] = {
+                PropertyHistoryEventType.Sold,
+                PropertyHistoryEventType.DeListed,
+            }
+            if len(history_events) > 0:
+                if history_events[-1].event_type in event_type_set_for_sold:
+                    return PropertyStatus.Sold
+
+                if history_events[-1].event_type == PropertyHistoryEventType.Pending:
+                    two_days = timedelta(days=2)
+                    # Check previous event if it is sold; Sometimes pending event is added after sold event
+                    # If pending and sold event are within 2 days, consider it as sold
+                    if len(history_events) > 1 and history_events[-2].event_type == PropertyHistoryEventType.Sold and history_events[-1].datetime - history_events[-2].datetime < two_days:
+                        return PropertyStatus.Sold
+
+                if history_events[-1].event_type == PropertyHistoryEventType.RentalRemoved:
+                    return PropertyStatus.RentalRemoved
+
+                if history_events[-1].event_type == PropertyHistoryEventType.Listed:
+                    return PropertyStatus.ListRemoved
+
+        if status_str.startswith("closed"):
+            # Property is not in market, need to check history to determine if it is renatl or sale closed
+            for event in reversed(history_events):
+                if event.event_type == PropertyHistoryEventType.ListedForRent or event.description.lower().find("rent") != -1:
+                    return PropertyStatus.RentalRemoved
+
+                if event.event_type == PropertyHistoryEventType.Listed and event.description.lower().find("rent") == -1:
+                    return PropertyStatus.ListRemoved
+
+    error_msg = f"Failed to parse status string: {status_str}"
+    raise PropertyDataStreamParsingError(
+        message = error_msg,
+        original_data=status_str,
+        error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyStatus,
+        error_data = status_str,
+    )
+
+def parse_property_history(data: Dict[str, Any], address: IPropertyAddress, last_updated: datetime) -> IPropertyHistory:
     if not isinstance(data, dict):
         raise ValueError("Data must be a dictionary")
     history_list = data.get('history', [])
@@ -301,10 +410,15 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             raise ValueError("Event description is missing or not a string")
 
         if description.lower().startswith("listed"):
-            event_type = PropertyHistoryEventType.Listed
+            # Found rent related events
+            if description.lower().find("rent") != -1:
+                event_type = PropertyHistoryEventType.ListedForRent
+            else:
+                event_type = PropertyHistoryEventType.Listed
         elif description.lower().startswith("sold"):
             event_type = PropertyHistoryEventType.Sold
         elif description.lower().startswith("price changed"):
+            # TODO: need to tell between sale and rent
             event_type = PropertyHistoryEventType.PriceChange
         elif description.lower().startswith("pending"):
             event_type = PropertyHistoryEventType.Pending
@@ -324,7 +438,7 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             raise ValueError(f"Unknown event description: {description}")
 
         if event_type == PropertyHistoryEventType.PriceChange and price is None:
-            print(f"Warning: PriceChange event without price on {date_str} for property {property_id}, address {address.address_hash}")
+            print(f"Warning: PriceChange event without price on {date_str} for property, address {address.address_hash}")
 
         # Parse source and sourceId
         source = event.get('source')
@@ -351,29 +465,30 @@ def parse_property_history(data: Dict[str, Any], property_id: str, address: IPro
             # Add event to history if not already present
             property_history.addEvent(history_event)
         else:
-            print(f"Found duplicate event: {history_event} for property {property_id}, address {address}")
+            print(f"Found duplicate event: {history_event} for property, address {address}")
 
     return property_history
 
 def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyHistory]:
     data = json.loads(line)
-    redfin_data = RedfinPropertyEntry(
-        url=data.get('url'),
-        redfinId=data.get('redfinId'),
-        scrapedAt=data.get('scrapedAt'),
-        address=data.get('address'),
-        area=data.get('area'),
-        propertyType=data.get('propertyType'),
-        lotArea=data.get('lotArea'),
-        numberOfBedrooms=data.get('numberOfBedroom'),
-        numberOfBathrooms=data.get('numberOfBathroom'),
-        yearBuilt=data.get('yearBuilt', None),
-        status=data.get('status', 'Unknown'),
-        price=data.get('price', None),
-        readyToBuildTag=data.get('readyToBuildTag', None),
-    )
+    return parse_json_to_property(data)
 
-    property_id = str(uuid.uuid4())
+def parse_json_to_property(json_object: Dict[str, Any]) -> Tuple[IPropertyMetadata, IPropertyHistory]:
+    redfin_data = RedfinPropertyEntry(
+        url = cast(str, json_object.get('url')),
+        redfinId = cast(str, json_object.get('redfinId')),
+        scrapedAt = cast(str,json_object.get('scrapedAt')),
+        address = cast(str,json_object.get('address')),
+        area = cast(str, json_object.get('area')),
+        propertyType = cast(str, json_object.get('propertyType')),
+        lotArea = json_object.get('lotArea'),
+        numberOfBedrooms=json_object.get('numberOfBedroom'),
+        numberOfBathrooms=json_object.get('numberOfBathroom'),
+        yearBuilt=json_object.get('yearBuilt', None),
+        status=json_object.get('status', 'Unknown'),
+        price=json_object.get('price', None),
+        readyToBuildTag=json_object.get('readyToBuildTag', None),
+    )
 
     # Parse property type
     if redfin_data.propertyType == "Townhome":
@@ -397,7 +512,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
 
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyType,
             error_data = redfin_data.propertyType,
         )
@@ -406,7 +521,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Vacant land property detected: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.VacantLandEncountered,
             error_data=None,
         )
@@ -422,7 +537,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Invalid area format: {redfin_data.area} for address: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
             error_data = redfin_data.area,
         )
@@ -437,7 +552,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Unknown area unit: {area_parts[1]} for address: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.UnknownAreaUnit,
             error_data = area_parts[1],
         )
@@ -451,7 +566,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
             error_msg = f"Invalid lot area format: {redfin_data.lotArea} for address: {redfin_data.address}"
             raise PropertyDataStreamParsingError(
                 message = error_msg,
-                original_data=line,
+                original_data=json.dumps(json_object),
                 error_code = PropertyDataStreamParsingErrorCode.InvalidPropertyDataFormat,
                 error_data = redfin_data.lotArea,
             )
@@ -467,7 +582,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
             error_msg = f"Unknown lot area unit: {lot_area_parts[1]} for address: {redfin_data.address}"
             raise PropertyDataStreamParsingError(
                 message = error_msg,
-                original_data=line,
+                original_data=json.dumps(json_object),
                 error_code = PropertyDataStreamParsingErrorCode.UnknownAreaUnit,
                 error_data = lot_area_parts[1],
             )
@@ -477,22 +592,6 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
     number_of_bedrooms = Decimal(redfin_data.numberOfBedrooms) if redfin_data.numberOfBedrooms is not None else None
     number_of_bathrooms = Decimal(redfin_data.numberOfBathrooms) if redfin_data.numberOfBathrooms is not None else None
     year_built = redfin_data.yearBuilt
-
-    # Parse status
-    if redfin_data.status == "Active":
-        status = PropertyStatus.Active
-    elif redfin_data.status == "Pending":
-        status = PropertyStatus.Pending
-    elif redfin_data.status == "Sold":
-        status = PropertyStatus.Sold
-    else:
-        error_msg = f"Unknown property status: {redfin_data.status} for address: {redfin_data.address}"
-        raise PropertyDataStreamParsingError(
-            message = error_msg,
-            original_data=line,
-            error_code = PropertyDataStreamParsingErrorCode.UnknownPropertyStatus,
-            error_data = redfin_data.status,
-        )
 
     # Parse price
     price = redfin_data.price
@@ -514,7 +613,7 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         error_msg = f"Number of bedrooms and bathrooms must be provided for non-vacant land properties: {redfin_data.address}"
         raise PropertyDataStreamParsingError(
             message = error_msg,
-            original_data=line,
+            original_data=json.dumps(json_object),
             error_code = PropertyDataStreamParsingErrorCode.MissingRequiredField,
             error_data = {
                 "propertyType": property_type,
@@ -524,7 +623,10 @@ def parse_json_str_to_property(line: str) -> Tuple[IPropertyMetadata, IPropertyH
         )
 
     # Parse property history
-    history = parse_property_history(data, property_id, address, last_updated)
+    history = parse_property_history(json_object, address, last_updated)
+
+    # Parse status
+    status = parse_property_status(redfin_data.status, history)
 
     # Legacy data doesn't have price
     if price is None and len(history.history) > 0:
