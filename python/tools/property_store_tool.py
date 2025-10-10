@@ -158,8 +158,8 @@ def main() -> None:
     property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_output")
 
     # Edit files below
-    start_file = "redfin_properties_20250929_175232.jsonl"
-    end_file = "redfin_properties_20251003_161445.jsonl"
+    start_file = "redfin_properties_20251009_190823.jsonl"
+    end_file = "redfin_properties_20251009_190823.jsonl"
 
     files = get_list_of_property_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")

@@ -21,7 +21,8 @@ from crawler.redfin_spider.redfin_parser import (
     parse_property_history,
     _parse_history_from_javascript,
     parse_property_sublinks,
-    _parse_address_str,
+    _parse_property_address,
+    _parse_property_status,
 )
 
 def test_parser_with_saved_file(filename: str) -> None:
@@ -129,11 +130,14 @@ if __name__ == "__main__":
     filename = "playwright_test_output_20250906_203049.html"  # Replace with your saved file name
     # test_parser_with_saved_file(filename)
 
-    url = "https://www.redfin.com/WA/Seattle/655-Crockett-St-98109/unit-B405/home/2067966"
+    url = "https://www.redfin.com/WA/Kirkland/11123-105th-Ave-NE-98033/home/462055"
     # Test with live URL (uncomment to test)
     def function_callback(html_str: str) -> None:
-        soup = BeautifulSoup(html_str, "html.parser")
-        address = _parse_address_str(soup)
+        # soup = BeautifulSoup(html_str, "html.parser")
+        address = parse_property_page(
+            url,
+            html_str,
+        )
 
         print(address)
     test_parser_with_url(url, function_callback)
