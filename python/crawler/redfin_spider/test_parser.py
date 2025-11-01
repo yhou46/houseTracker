@@ -130,7 +130,7 @@ if __name__ == "__main__":
     filename = "playwright_test_output_20250906_203049.html"  # Replace with your saved file name
     # test_parser_with_saved_file(filename)
 
-    url = "https://www.redfin.com/WA/Kirkland/11123-105th-Ave-NE-98033/home/462055"
+    url = "https://www.redfin.com/WA/Redmond/24626-NE-102nd-St-98053/unit-A/home/194434730"
     # Test with live URL (uncomment to test)
     def function_callback(html_str: str) -> None:
         # soup = BeautifulSoup(html_str, "html.parser")

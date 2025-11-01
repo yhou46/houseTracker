@@ -21,4 +21,4 @@ CITY_URL_MAP: Dict[str, str] = {
     "WA/Lynnwood": "https://www.redfin.com/city/10421/WA/Lynnwood"
 }
 
-ENABLE_BROWSER_RENDERING: bool = False  # Enable Playwright for JavaScript rendering
+ENABLE_BROWSER_RENDERING: bool = False  # Whether to enable Playwright for JavaScript rendering

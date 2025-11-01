@@ -939,22 +939,25 @@ class DynamoDBPropertyService(IPropertyService):
         result_property_list: List[IProperty] = []
         # TODO: use dynamodb.batch_get_item ?
         self.logger.info(f"query for property details...")
-        for property_id in result_property_id_list:
-            property_object = self.get_property_by_id(property_id)
+        try:
+            for property_id in result_property_id_list:
+                property_object = self.get_property_by_id(property_id)
 
-            if property_object:
+                if property_object:
 
-                # Filter based on other query filters
-                if query.price_range and property_object.price and (property_object.price < query.price_range[0] or property_object.price > query.price_range[1]):
-                    # Price not within the range, skip
-                    self.logger.info(f"Property price: {property_object.price} is not within the price range in query: {query.price_range}")
-                    continue
+                    # Filter based on other query filters
+                    if query.price_range and property_object.price and (property_object.price < query.price_range[0] or property_object.price > query.price_range[1]):
+                        # Price not within the range, skip
+                        self.logger.info(f"Property price: {property_object.price} is not within the price range in query: {query.price_range}")
+                        continue
 
-                # TODO: add other filters
+                    # TODO: add other filters
 
-                result_property_list.append(property_object)
-
-        return result_property_list, cast(Mapping[str, str] | None ,last_evaluated_key)
+                    result_property_list.append(property_object)
+            return result_property_list, cast(Mapping[str, str] | None ,last_evaluated_key)
+        except Exception as error:
+            self.logger.error(f"Error converting DynamoDB item to IProperty: {str(error)}, property id: {property_id}")
+            raise error
 
 
 

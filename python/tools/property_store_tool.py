@@ -155,11 +155,11 @@ def main() -> None:
     logger = logger_factory.get_logger(__name__)
 
 
-    property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_output")
+    property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "redfin_spider_monolith_output")
 
     # Edit files below
-    start_file = "redfin_properties_20251009_190823.jsonl"
-    end_file = "redfin_properties_20251009_190823.jsonl"
+    start_file = "redfin_properties_20251031_183340.jsonl"
+    end_file = "redfin_properties_20251031_183340.jsonl"
 
     files = get_list_of_property_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")

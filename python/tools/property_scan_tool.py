@@ -236,12 +236,12 @@ def main() -> None:
 
     query = PropertyQueryPattern(
         state="WA",
-        status_list=[PropertyStatus.Pending]
+        status_list=[PropertyStatus.Active]
     )
     scan_and_update2(
         query,
-        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20251005_183628.txt",
-        # last_evaluated_property_id = "87fb0f9b-0dab-41b8-ad28-7fb00321bf1d",
+        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20251023_223039.txt",
+        # last_evaluated_property_id = "4a100758-a0a5-4a2e-9773-9600b8210156",
     )
 
 

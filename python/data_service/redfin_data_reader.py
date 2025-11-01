@@ -77,6 +77,7 @@ class PropertyDataStreamParsingErrorCode(Enum):
     InvalidPropertyDataType = "InvalidPropertyDataType",
     InvalidPropertyAddress = "InvalidPropertyAddress",
     MissingRequiredField = "MissingRequiredField",
+    ReadyToBuildTagEncountered = "ReadyToBuildTagEncountered",
 
 
 class PropertyDataStreamParsingError(Exception):
@@ -124,6 +125,7 @@ class IPropertyDataStream(Iterator[IPropertyDataStreamIteratorType]):
     def __init__(self, error_handler: PropertyDataStreamErrorHandlerType):
         self._error_handler = error_handler
 
+    # TODO: it probably should return a json typed dict, since the parsing need extra info, like existing property data in DB to determine some fields
     def __iter__(self) -> Iterator[IPropertyDataStreamIteratorType]:
         self.initialize()
         return self
@@ -339,6 +341,7 @@ def parse_property_status(status_str: str, history: IPropertyHistory) -> Propert
                 PropertyHistoryEventType.PriceChange,
                 PropertyHistoryEventType.RentalRemoved,
                 PropertyHistoryEventType.ListRemoved,
+                PropertyHistoryEventType.Pending,
             }
             if len(history_events) > 0 and (history_events[-1].event_type in event_type_set):
                 return PropertyStatus.ListRemoved
@@ -365,6 +368,8 @@ def parse_property_status(status_str: str, history: IPropertyHistory) -> Propert
 
                 if history_events[-1].event_type == PropertyHistoryEventType.Listed:
                     return PropertyStatus.ListRemoved
+
+                # TODO: get date from string like "soldon jun 17, 2025", parse the date and compare with last  event date, if it is earlier, then mark it as ListRemoved
 
         if status_str.startswith("closed"):
             # Property is not in market, need to check history to determine if it is renatl or sale closed
@@ -489,6 +494,14 @@ def parse_json_to_property(json_object: Dict[str, Any]) -> Tuple[IPropertyMetada
         price=json_object.get('price', None),
         readyToBuildTag=json_object.get('readyToBuildTag', None),
     )
+
+    if redfin_data.readyToBuildTag:
+        raise PropertyDataStreamParsingError(
+            message = f"Property is marked as ready to build: {redfin_data.address}",
+            original_data=json.dumps(json_object),
+            error_code = PropertyDataStreamParsingErrorCode.ReadyToBuildTagEncountered,
+            error_data = redfin_data.address,
+        )
 
     # Parse property type
     if redfin_data.propertyType == "Townhome":

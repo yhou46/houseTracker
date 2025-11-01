@@ -208,7 +208,7 @@ class IPropertyHistory:
         Existing events in existing_history is unchanged and duplicates from new_history will be removed and e
         """
         if existing_history.address != new_history.address:
-            raise ValueError("Cannot merge histories with different addresses")
+            raise ValueError(f"Cannot merge histories with different addresses, address1: {existing_history.address}, address2: {new_history.address}")
 
         # The order matters: existing_history should be first to keep existing events
         combined_events = existing_history.history + new_history.history

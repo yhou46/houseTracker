@@ -51,13 +51,17 @@ class TestGetAddressHash(unittest.TestCase):
 
     def test_addresses_with_special_marks(self) -> None:
         test_addresses: List[Tuple[str, str]] = [
+            # HS or Homesite cases
             ("7988 170th Ave NE (Homesite #14),Redmond, WA 98052", "7988-170th-ave-ne|apt-14|redmond|wa|98052"),
             ("11170 (HS #24) NE 134th Ct NE, Redmond, WA 98052", "11170-ne-134th-ct-ne|apt-24|redmond|wa|98052"),
             ("13468 (HS #9) NE 112th Pl, Redmond, WA 98052", "13468-ne-112th-pl|apt-9|redmond|wa|98052"),
             ("11162 (HS 23) 134th Ct NE, Redmond, WA 98052", "11162-134th-ct-ne|apt-23|redmond|wa|98052"),
             ("13426 (HS 2) NE 112th Pl, Redmond, WA 98052", "13426-ne-112th-pl|apt-2|redmond|wa|98052"),
             ("13472 (HS 8) NE 112th Pl, Redmond, WA 98052", "13472-ne-112th-pl|apt-8|redmond|wa|98052"),
-            ("13434 (HS 3) NE 112th Pl, Redmond, WA 98052", "13434-ne-112th-pl|apt-3|redmond|wa|98052")
+            ("13434 (HS 3) NE 112th Pl, Redmond, WA 98052", "13434-ne-112th-pl|apt-3|redmond|wa|98052"),
+
+            # Private Lane case
+            ("8533 NE Juanita Dr (Private Lane), Kirkland, WA 98034", "8533-ne-juanita-dr|kirkland|wa|98034"),
         ]
         for input_addr, expected_hash in test_addresses:
             print(f"Input: {input_addr}, Hashed: {get_address_hash(input_addr)}")

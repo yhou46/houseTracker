@@ -125,6 +125,15 @@ def preprocess_address_str(address_str: str) -> str:
                 # Convert HS to HomeSite in the moved part
                 address_str = address_str.replace("HS", "APT", 1)
                 address_str = address_str.replace("#", "", 1)
+        # TODO: handle private lane cases:
+        # example:
+        # 8533 NE Juanita Dr (Private Lane), Kirkland, WA 98034 should be
+        # 8533 NE Juanita Dr, Kirkland, WA 98034
+        elif content.lower() == "private lane":
+            parts_before_parenthesis = address_str[:open_idx].strip()
+            parts_after_parenthesis = address_str[close_idx+1:]
+            address_str = f"{parts_before_parenthesis}{parts_after_parenthesis}"
+
 
             # Update start index to continue searching
             # start_idx = len(street_part) + len(homesite_part) + 1
