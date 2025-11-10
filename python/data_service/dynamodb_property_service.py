@@ -39,10 +39,13 @@ from shared.iproperty import (
 )
 from shared.iproperty_address import IPropertyAddress
 import shared.logger_factory as logger_factory
+from data_service.iproperty_data_reader import (
+    IPropertyDataStream,
+)
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
     PropertyDataStreamParsingError,
-    IPropertyDataStream,
+    parse_raw_data_to_property,
 )
 from data_service.iproperty_service import (
     IPropertyService,
@@ -987,12 +990,13 @@ def run_save_test(table_name: str, region: str) -> None:
         reader: IPropertyDataStream = RedfinFileDataReader(redfin_output_path, file_error_handler)
         count = 0
 
-        for metadata, history in reader:
+        for raw_data in reader:
             count += 1
             print(property)
 
             print("Start to save property to DynamoDB")
             dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
+            metadata, history = parse_raw_data_to_property(raw_data)
             new_property = IProperty(
                 IProperty.generate_id(),
                 metadata,
