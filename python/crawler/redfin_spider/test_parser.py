@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import json
 
 from typing import Callable, Any
+from shared.logger_factory import configure_logger
 
 # Add the current directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -130,7 +131,9 @@ if __name__ == "__main__":
     filename = "playwright_test_output_20250906_203049.html"  # Replace with your saved file name
     # test_parser_with_saved_file(filename)
 
-    url = "https://www.redfin.com/WA/Redmond/24626-NE-102nd-St-98053/unit-A/home/194434730"
+    configure_logger()
+
+    url = "https://www.redfin.com/WA/Bothell/23922-38th-Ave-SE-98021/home/195186044"
     # Test with live URL (uncomment to test)
     def function_callback(html_str: str) -> None:
         # soup = BeautifulSoup(html_str, "html.parser")

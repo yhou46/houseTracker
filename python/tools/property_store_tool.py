@@ -16,6 +16,8 @@ from data_service.iproperty_data_reader import (
 )
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
+)
+from data_service.redfin_data_parser import (
     PropertyDataStreamParsingError,
     parse_raw_data_to_property,
 )
@@ -161,8 +163,8 @@ def main() -> None:
     property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "redfin_spider_monolith_output")
 
     # Edit files below
-    start_file = "redfin_properties_20251105_175525.jsonl"
-    end_file = "redfin_properties_20251105_175525.jsonl"
+    start_file = "redfin_properties_20251202_194549.jsonl"
+    end_file = "redfin_properties_20251202_194549.jsonl"
 
     files = get_list_of_property_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")

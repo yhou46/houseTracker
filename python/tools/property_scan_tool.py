@@ -19,17 +19,18 @@ from data_service.dynamodb_property_service import (
 from data_service.iproperty_service import (
     PropertyQueryPattern,
 )
-from data_service.redfin_data_reader import (
-    PropertyDataStreamParsingError
-)
 from crawler.redfin_spider.redfin_parser import (
     parse_property_page
 )
-from data_service.redfin_data_reader import (
+from data_service.redfin_data_parser import (
     parse_property_history,
-    parse_json_to_property,
     parse_property_status,
+    parse_raw_data_to_property,
 )
+from data_service.redfin_data_reader import (
+    get_raw_data_entry,
+)
+
 
 def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyService) -> None:
 
@@ -51,29 +52,35 @@ def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyServi
             url=source_url,
             html_content=response.text,
         )
+        raw_data = get_raw_data_entry(item_dict)
 
-        # Parse history
-        new_history = parse_property_history(
-            data = item_dict,
-            address = property.address,
-            last_updated = property.last_updated,
+        new_metadata, new_history = parse_raw_data_to_property(
+            raw_data,
+            property,
         )
-        # Need to merge history first in case history is removed on closed property
-        property.update_history(new_history)
 
-        # Inactive property may have many data fields omitted, only update the status
-        status_raw_str = item_dict.get("status")
-        if not isinstance(status_raw_str, str):
-            raise ValueError(f"Status: {status_raw_str} is not str")
+        # # Parse history
+        # new_history = parse_property_history(
+        #     data = get_raw_data_entry(item_dict),
+        #     address = property.address,
+        #     last_updated = property.last_updated,
+        # )
+        # # Need to merge history first in case history is removed on closed property
+        # property.update_history(new_history)
 
-        new_status = parse_property_status(status_raw_str, property.history)
-        if new_status != property.status:
-            logger.info(f"Found status update, new status: {new_status.value}, old status: {property.status.value}")
-            property.metadata.update_status(new_status)
+        # # Inactive property may have many data fields omitted, only update the status
+        # status_raw_str = item_dict.get("status")
+        # if not isinstance(status_raw_str, str):
+        #     raise ValueError(f"Status: {status_raw_str} is not str")
 
-            # Reset property price if property is sold
-            if new_status == PropertyStatus.Sold:
-                property.metadata.update_price(None)
+        # new_status = parse_property_status(status_raw_str, property.history)
+        # if new_status != property.status:
+        #     logger.info(f"Found status update, new status: {new_status.value}, old status: {property.status.value}")
+        #     property.metadata.update_status(new_status)
+
+        #     # Reset property price if property is sold
+        #     if new_status == PropertyStatus.Sold:
+        #         property.metadata.update_price(None)
 
 
 
@@ -81,8 +88,8 @@ def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyServi
         logger.info(f"Property status: {property.status} for address hash: {property.address.address_hash}")
 
         dynamodb_service.create_or_update_property(
-            property.metadata,
-            property.history,
+            new_metadata,
+            new_history,
         )
 
     except Exception as e:
@@ -240,8 +247,8 @@ def main() -> None:
     )
     scan_and_update2(
         query,
-        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20251023_223039.txt",
-        # last_evaluated_property_id = "4a100758-a0a5-4a2e-9773-9600b8210156",
+        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20251202_205748.txt",
+        # last_evaluated_property_id = "26ae0202-a10c-4c70-83d3-929336db01b2",
     )
 
 

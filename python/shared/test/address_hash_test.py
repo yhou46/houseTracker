@@ -60,6 +60,9 @@ class TestGetAddressHash(unittest.TestCase):
             ("13472 (HS 8) NE 112th Pl, Redmond, WA 98052", "13472-ne-112th-pl|apt-8|redmond|wa|98052"),
             ("13434 (HS 3) NE 112th Pl, Redmond, WA 98052", "13434-ne-112th-pl|apt-3|redmond|wa|98052"),
 
+            # Duplicate unit cases, remove (HS xx) if unit info already present
+            ("10814 (HS 65) 120TH Ln NE Unit E, Kirkland, WA 98033", "10814-120th-ln-ne|apt-e|kirkland|wa|98033"),
+
             # Private Lane case
             ("8533 NE Juanita Dr (Private Lane), Kirkland, WA 98034", "8533-ne-juanita-dr|kirkland|wa|98034"),
         ]

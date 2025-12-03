@@ -81,6 +81,13 @@ class InvalidAddressError(Exception):
     def __str__(self) -> str:
         return super().__str__() + f"Address: {self.address})"
 
+def address_str_has_unit_info(address_str: str) -> bool:
+    lower_addr = address_str.lower()
+    for unit_keyword in unit_abbr.keys():
+        if unit_keyword in lower_addr:
+            return True
+    return False
+
 def preprocess_address_str(address_str: str) -> str:
     """
     Preprocess address string to handle special cases and normalize formatting.
@@ -120,7 +127,10 @@ def preprocess_address_str(address_str: str) -> str:
                 print(f"street part: {parts_before_parenthesis}, other_part: {other_part}, content: {content}")
 
                 # Reconstruct: street + homesite + city
-                address_str = f"{parts_before_parenthesis}{parts_after_parenthesis} {homesite_part}{other_part}"
+                if address_str_has_unit_info(address_str):
+                    address_str = f"{parts_before_parenthesis}{parts_after_parenthesis}{other_part}"
+                else:
+                    address_str = f"{parts_before_parenthesis}{parts_after_parenthesis} {homesite_part}{other_part}"
 
                 # Convert HS to HomeSite in the moved part
                 address_str = address_str.replace("HS", "APT", 1)
@@ -144,6 +154,7 @@ def preprocess_address_str(address_str: str) -> str:
 
     return address_str
 
+# TODO: create address parsing error
 def get_address_components(address: str, logger: logging.Logger | None = None) -> Dict[str, str]:
     try:
         # Preprocess address string
@@ -199,9 +210,9 @@ def get_address_components(address: str, logger: logging.Logger | None = None) -
         zipcode = address_property_bag.get("ZipCode", "")
         components["zipcode"] = zipcode
         return components
-    except Exception as e:
+    except Exception as error:
         # Fallback: normalize the original string if parsing fails
-        error_msg = f"Error parsing address: {address}, error: {e}"
+        error_msg = f"Error parsing address: {address}, error: {error}"
         if logger != None:
             logger.error(error_msg)
         else:
