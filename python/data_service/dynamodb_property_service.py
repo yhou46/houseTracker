@@ -44,8 +44,10 @@ from data_service.iproperty_data_reader import (
 )
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
-    PropertyDataStreamParsingError,
+)
+from data_service.redfin_data_parser import (
     parse_raw_data_to_property,
+    PropertyDataStreamParsingError,
 )
 from data_service.iproperty_service import (
     IPropertyService,
@@ -603,7 +605,11 @@ class DynamoDBPropertyService(IPropertyService):
             self.logger.error(f"Error retrieving property with address {address}: {error.response['Error']['Message']}")
             raise error
 
-    def create_or_update_property(self, property_metadata: IPropertyMetadata, property_history: IPropertyHistory) -> IProperty:
+    def create_or_update_property(
+            self,
+            property_metadata: IPropertyMetadata,
+            property_history: IPropertyHistory,
+        ) -> IProperty:
         """
         Create or update a property in the DynamoDB table.
 
