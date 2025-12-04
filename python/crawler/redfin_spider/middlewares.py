@@ -11,11 +11,11 @@ from itemadapter import ItemAdapter
 import sys
 import os
 
-shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
+# shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
 
 # Only add if not already in path
-if shared_path not in sys.path:
-    sys.path.insert(0, shared_path)
+# if shared_path not in sys.path:
+#     sys.path.insert(0, shared_path)
 
 class RedfinSpiderSpiderMiddleware:
     # Not all methods need to be defined. If a method is not defined,

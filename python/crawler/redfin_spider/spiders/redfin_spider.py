@@ -1,33 +1,103 @@
 import os
 from datetime import datetime
-from typing import Any
+from typing import (
+    Any,
+    Dict,
+)
 
 import scrapy
 from scrapy.http import Response, Request
 
 from ..items import RedfinPropertyItem
-from ..config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP, ENABLE_BROWSER_RENDERING
+from .monolith_config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP, ENABLE_BROWSER_RENDERING
 from ..redfin_parser import parse_property_page, parse_property_sublinks
 
-
-class RedfinSpider(scrapy.Spider):
+class RedfinSpiderMonolith(scrapy.Spider):
     """
     Sample spider for crawling Redfin property listings.
 
     This is a basic structure that we'll complete later.
     """
 
-    name = 'redfin_spider'
-    allowed_domains = ['redfin.com']
+    name = "redfin_spider_monolith"
+    allowed_domains = [
+        "redfin.com",
+    ]
+
+    custom_settings = {
+        # Logging settings
+        "LOG_LEVEL": 'INFO',
+        "LOG_STDOUT": True,
+        "LOG_FORMAT": '%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+        "LOG_DATEFORMAT": '%Y-%m-%d %H:%M:%S',
+        "LOG_FILE_APPEND": False,
+
+        # Crawler settings
+        "BOT_NAME": "redfin_spider_monolith",
+        "CONCURRENT_REQUESTS": 2,
+        "DOWNLOAD_DELAY": 2,
+
+        # Pipelines
+        "ITEM_PIPELINES": {
+            "redfin_spider.pipelines.JsonlPipeline": 300,
+        },
+
+        # Playwright specific settings
+        # It is not working yet...
+        # Reference: https://github.com/scrapy-plugins/scrapy-playwright?tab=readme-ov-file#supported-settings
+        "DOWNLOAD_HANDLERS": {
+            "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+            "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+        },
+        # Playwright-specific settings
+        "PLAYWRIGHT_LAUNCH_OPTIONS": {
+            "headless": True,  # Run browser in background (no visible window)
+            "timeout": 20 * 1000,  # 20 seconds timeout
+        },
+        "PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT": 30000,  # 30 seconds for page load
+
+        # Customized settings
+        # "JSONL_OUTPUT_DIR": "redfin_output",
+        "JSONL_OUTPUT_FILE": None, # Will use timestamp-based filename if None
+    }
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs): # type: ignore[no-untyped-def]
+        spider = super().from_crawler(crawler, *args, **kwargs)
+
+        # Create log directory if not exists
+        log_directory = os.path.join(os.path.dirname(__file__), "..", f"{cls.name}_logs")
+        os.makedirs(log_directory, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d %H%M%S")
+        # Set up log path
+        spider.settings.set(
+            "LOG_FILE", os.path.join(log_directory, f'{cls.name}_{timestamp}.log'), priority="spider",
+        )
+
+        # Set up output directory
+        output_directory = os.path.join(os.path.dirname(__file__), "..", f"{cls.name}_output")
+        os.makedirs(output_directory, exist_ok=True)
+        spider.settings.set(
+            "JSONL_OUTPUT_DIR", output_directory, priority="spider",
+        )
+
+        return spider
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super(RedfinSpider, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Generate start URLs from config
         zip_code_urls = [
             REDFIN_ZIP_URL_FORMAT.format(zip_code=zip_code) for zip_code in ZIP_CODES
         ]
         city_urls = list(CITY_URL_MAP.values())
         self.start_urls = zip_code_urls + city_urls
+
+        # # Create log directory if not exists
+        # log_directory = os.path.join(os.path.dirname(__file__), "..", f"{self.name}_logs")
+        # os.makedirs(log_directory, exist_ok=True)
+        # timestamp = datetime.now().strftime("%Y%m%d %H%M%S")
+        # # Set up log path
+        # type(self).custom_settings["LOG_FILE"] = os.path.join(log_directory, f'{self.name}_{timestamp}.log')
 
         # Create debug directory for saving HTML responses
         self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')

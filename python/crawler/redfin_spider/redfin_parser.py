@@ -214,36 +214,59 @@ def parse_property_details(html_content: str) -> Dict[str, Any]:
 def _parse_property_address(beautiful_soup: BeautifulSoup) -> str:
 
     # Try parse using the tag
-    html_address_class_name = "full-address addressBannerRevamp street-address"
-    address_tag = beautiful_soup.find("h1", class_=html_address_class_name)
-    if address_tag:
-        address = address_tag.get_text(strip=True)
+    html_address_tag_list = [
+        "full-address addressBannerRevamp street-address",
+        "streetAddress addressBannerRevamp",
+        "full-address street-address",
+    ]
 
-        try:
-            # Try parsing address
-            get_address_components(address)
-            return address
-        except Exception as error:
-            # Failed to parse the address
-            logger.warning(f"Faled to parse address using the tag: {html_address_class_name}")
+    for tag in html_address_tag_list:
+        address_tag = beautiful_soup.find("h1", class_=tag)
+        if address_tag:
+            address = address_tag.get_text(strip=True)
+
+            try:
+                # Try parsing address
+                get_address_components(address)
+                return address
+            except Exception as error:
+                # Failed to parse the address
+                logger.warning(f"Faled to parse address using the tag: {tag}, error: {error}")
+
+    # Try parse using the CSS selectors
+    html_address_css_selectors = [
+        'div[data-rf-test-name="street-address"]',
+    ]
+    for selector in html_address_css_selectors:
+        address_elements = beautiful_soup.select(selector)
+        if address_elements and len(address_elements) > 0:
+            address = address_elements[0].get_text(strip=True)
+
+            try:
+                # Try parsing address
+                get_address_components(address)
+                return address
+            except Exception as error:
+                # Failed to parse the address
+                logger.warning(f"Faled to parse address using the selector: {selector}, error: {error}")
 
     # Try parse using the title
-    title = beautiful_soup.title
-    if title and title.string:
-        parts = title.string.split("|")
+    # title = beautiful_soup.title
+    # if title and title.string:
+    #     parts = title.string.split("|")
 
-        address = parts[0].strip() if len(parts) >= 2 else ""
-        if not address:
-            logger.error(f"Failed to parse address using title. title: {title} is invalid")
+    #     address = parts[0].strip() if len(parts) >= 2 else ""
+    #     if not address:
+    #         logger.error(f"Failed to parse address using title. title: {title} is invalid")
 
-        try:
-            # Try parsing address
-            get_address_components(address)
-            return address
-        except Exception as error:
-            # Failed to parse the address
-            logger.warning(f"Faled to parse address using the title: {title}")
-        return address
+    #     try:
+    #         # Try parsing address
+    #         get_address_components(address)
+    #         return address
+    #     except Exception as error:
+    #         # Failed to parse the address
+    #         logger.warning(f"Faled to parse address using the title: {title}")
+    #     return address
 
     raise ValueError("Failed to parse address from html page")
 

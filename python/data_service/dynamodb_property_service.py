@@ -39,10 +39,15 @@ from shared.iproperty import (
 )
 from shared.iproperty_address import IPropertyAddress
 import shared.logger_factory as logger_factory
+from data_service.iproperty_data_reader import (
+    IPropertyDataStream,
+)
 from data_service.redfin_data_reader import (
     RedfinFileDataReader,
+)
+from data_service.redfin_data_parser import (
+    parse_raw_data_to_property,
     PropertyDataStreamParsingError,
-    IPropertyDataStream,
 )
 from data_service.iproperty_service import (
     IPropertyService,
@@ -600,7 +605,11 @@ class DynamoDBPropertyService(IPropertyService):
             self.logger.error(f"Error retrieving property with address {address}: {error.response['Error']['Message']}")
             raise error
 
-    def create_or_update_property(self, property_metadata: IPropertyMetadata, property_history: IPropertyHistory) -> IProperty:
+    def create_or_update_property(
+            self,
+            property_metadata: IPropertyMetadata,
+            property_history: IPropertyHistory,
+        ) -> IProperty:
         """
         Create or update a property in the DynamoDB table.
 
@@ -939,22 +948,25 @@ class DynamoDBPropertyService(IPropertyService):
         result_property_list: List[IProperty] = []
         # TODO: use dynamodb.batch_get_item ?
         self.logger.info(f"query for property details...")
-        for property_id in result_property_id_list:
-            property_object = self.get_property_by_id(property_id)
+        try:
+            for property_id in result_property_id_list:
+                property_object = self.get_property_by_id(property_id)
 
-            if property_object:
+                if property_object:
 
-                # Filter based on other query filters
-                if query.price_range and property_object.price and (property_object.price < query.price_range[0] or property_object.price > query.price_range[1]):
-                    # Price not within the range, skip
-                    self.logger.info(f"Property price: {property_object.price} is not within the price range in query: {query.price_range}")
-                    continue
+                    # Filter based on other query filters
+                    if query.price_range and property_object.price and (property_object.price < query.price_range[0] or property_object.price > query.price_range[1]):
+                        # Price not within the range, skip
+                        self.logger.info(f"Property price: {property_object.price} is not within the price range in query: {query.price_range}")
+                        continue
 
-                # TODO: add other filters
+                    # TODO: add other filters
 
-                result_property_list.append(property_object)
-
-        return result_property_list, cast(Mapping[str, str] | None ,last_evaluated_key)
+                    result_property_list.append(property_object)
+            return result_property_list, cast(Mapping[str, str] | None ,last_evaluated_key)
+        except Exception as error:
+            self.logger.error(f"Error converting DynamoDB item to IProperty: {str(error)}, property id: {property_id}")
+            raise error
 
 
 
@@ -984,12 +996,13 @@ def run_save_test(table_name: str, region: str) -> None:
         reader: IPropertyDataStream = RedfinFileDataReader(redfin_output_path, file_error_handler)
         count = 0
 
-        for metadata, history in reader:
+        for raw_data in reader:
             count += 1
             print(property)
 
             print("Start to save property to DynamoDB")
             dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
+            metadata, history = parse_raw_data_to_property(raw_data)
             new_property = IProperty(
                 IProperty.generate_id(),
                 metadata,

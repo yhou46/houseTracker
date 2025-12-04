@@ -11,10 +11,15 @@ from pathlib import Path
 
 import shared.logger_factory as logger_factory
 from data_service.dynamodb_property_service import DynamoDBPropertyService
-from data_service.redfin_data_reader import (
+from data_service.iproperty_data_reader import (
     IPropertyDataStream,
-    PropertyDataStreamParsingError,
+)
+from data_service.redfin_data_reader import (
     RedfinFileDataReader,
+)
+from data_service.redfin_data_parser import (
+    PropertyDataStreamParsingError,
+    parse_raw_data_to_property,
 )
 
 def get_list_of_property_files(file_directory: str, start_file: str, end_file: str) -> List[str]:
@@ -67,18 +72,16 @@ def store_property_from_file(
 
     logger.info(f"Starting to read Redfin data from {property_data_file}. Error file: {data_reader_error_file}")
 
-    with open(data_reader_error_file, 'w', encoding='utf-8') as error_file:
-        def file_error_handler(error: PropertyDataStreamParsingError) -> None:
-            error_msg = f"{datetime.now().isoformat()} - {str(error)}\n"
-            error_file.write(error_msg)
-            error_file.flush()
 
-        reader: IPropertyDataStream = RedfinFileDataReader(property_data_file, file_error_handler)
-        dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
 
-        count = 0
-        logger.info("Start to save property to DynamoDB")
-        for metadata, history in reader:
+    reader: IPropertyDataStream = RedfinFileDataReader(property_data_file)
+    dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
+
+    count = 0
+    logger.info("Start to save property to DynamoDB")
+    for raw_data in reader:
+        try:
+            metadata, history = parse_raw_data_to_property(raw_data)
             logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
 
             # Update or create property
@@ -92,7 +95,9 @@ def store_property_from_file(
                 if delay_seconds != None and delay_seconds > 0:
                     logger.info(f"Processed count: {count}, sleep for {delay_seconds} seconds")
                     time.sleep(delay_seconds)
-        logger.info(f"Finished processing. Total properties processed: {count}, reader errors logged to {data_reader_error_file}, service log file: {logger_factory.get_log_file_path()}")
+        except PropertyDataStreamParsingError as error:
+            logger.error(f"Error parsing property data: {error}")
+    logger.info(f"Finished processing. Total properties processed: {count}")
 
 def store_properties_to_db(
     property_file_dir: str,
@@ -155,11 +160,11 @@ def main() -> None:
     logger = logger_factory.get_logger(__name__)
 
 
-    property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_output")
+    property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "redfin_spider_monolith_output")
 
     # Edit files below
-    start_file = "redfin_properties_20251009_190823.jsonl"
-    end_file = "redfin_properties_20251009_190823.jsonl"
+    start_file = "redfin_properties_20251202_194549.jsonl"
+    end_file = "redfin_properties_20251202_194549.jsonl"
 
     files = get_list_of_property_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")

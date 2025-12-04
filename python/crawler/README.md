@@ -10,13 +10,13 @@ pipenv shell
 - Run with debug
 ```shell
 cd python/crawler
-scrapy crawl redfin_spider -L DEBUG
+scrapy crawl redfin_spider_monolith-L DEBUG
 ```
 
 - Run with only a few items
 ```shell
 cd python/crawler
-python -m scrapy crawl redfin_spider -s CLOSESPIDER_ITEMCOUNT=1
+python -m scrapy crawl redfin_spider_monolith -s CLOSESPIDER_ITEMCOUNT=1
 ```
 
 ## Run test
