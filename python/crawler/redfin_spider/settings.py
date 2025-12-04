@@ -1,33 +1,30 @@
 # Scrapy settings for redfin_spider project
+# This project level settings and is applied to all spiders in the project
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
 #
-#     https://docs.scrapy.org/en/latest/topics/settings.html
-#     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+#    https://docs.scrapy.org/en/latest/topics/settings.html#built-in-settings-reference
+#    https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
+#    https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
-import sys
-import os
-from datetime import datetime
-from typing import Dict
+
 
 # Add shared folder to Python path
 # This allows importing from python/shared/ from any Scrapy project
-shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
-sys.path.insert(0, shared_path)
+# shared_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'shared')
+# sys.path.insert(0, shared_path)
 
 
 # =============================================================================
 # CRAWLER SETTINGS
 # =============================================================================
-BOT_NAME = "redfin_spider"
-
-SPIDER_MODULES = ["redfin_spider.spiders"]
+# A list of modules where Scrapy will look for spiders.
+SPIDER_MODULES = [
+    "redfin_spider.spiders"
+]
+# Module where to create new spiders using the genspider command.
 NEWSPIDER_MODULE = "redfin_spider.spiders"
-
-ADDONS = {} # type: ignore
-
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = "redfin_spider (+http://www.yourdomain.com)"
@@ -38,12 +35,12 @@ ROBOTSTXT_OBEY = True
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 #CONCURRENT_REQUESTS = 32
-CONCURRENT_REQUESTS = 2
+# CONCURRENT_REQUESTS = 2
 
 # Configure a delay for requests for the same website (default: 0)
 # See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
 # See also autothrottle settings and docs
-DOWNLOAD_DELAY = 2
+# DOWNLOAD_DELAY = 2
 # The download delay setting will honor only one of:
 #CONCURRENT_REQUESTS_PER_DOMAIN = 16
 #CONCURRENT_REQUESTS_PER_IP = 16
@@ -72,18 +69,18 @@ DOWNLOAD_DELAY = 2
 #     "scrapy_playwright.middleware.PlaywrightMiddleware": 725,
 # }
 
-DOWNLOAD_HANDLERS = {
-    "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
-    "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
-}
-
-# Playwright-specific settings
-PLAYWRIGHT_LAUNCH_OPTIONS = {
-    "headless": True,  # Run browser in background (no visible window)
-    "timeout": 20 * 1000,  # 20 seconds timeout
-}
-
-PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 30000  # 30 seconds for page load
+# # Playwright specific settings
+# # Reference: https://github.com/scrapy-plugins/scrapy-playwright?tab=readme-ov-file#supported-settings
+# DOWNLOAD_HANDLERS = {
+#     "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+#     "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+# }
+# # Playwright-specific settings
+# PLAYWRIGHT_LAUNCH_OPTIONS = {
+#     "headless": True,  # Run browser in background (no visible window)
+#     "timeout": 20 * 1000,  # 20 seconds timeout
+# }
+# PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 30000  # 30 seconds for page load
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -93,13 +90,15 @@ PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 30000  # 30 seconds for page load
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-ITEM_PIPELINES: Dict[str, int] = {
-    "redfin_spider.pipelines.JsonlPipeline": 300,
-}
+# TODO: need to move to customzied settings
+# ITEM_PIPELINES: Dict[str, int] = {
+#     "redfin_spider.pipelines.JsonlPipeline": 300,
+# }
 
 # JSONL Pipeline settings
-JSONL_OUTPUT_DIR = "redfin_output"
-JSONL_OUTPUT_FILE = None # Will use timestamp-based filename if None
+# TODO: need to move to customzied settings
+# JSONL_OUTPUT_DIR = "redfin_output"
+# JSONL_OUTPUT_FILE = None # Will use timestamp-based filename if None
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
@@ -126,17 +125,16 @@ JSONL_OUTPUT_FILE = None # Will use timestamp-based filename if None
 FEED_EXPORT_ENCODING = "utf-8"
 
 # =============================================================================
-# Logging settings
+# Default logging settings
 # =============================================================================
 ## Create log folder if it doesn't exist
-logs_dir = os.path.join(os.path.dirname(__file__), '..', 'redfin_logs')
-os.makedirs(logs_dir, exist_ok=True)
-timestamp = datetime.now().strftime("%Y%m%d %H%M%S")
+# logs_dir = os.path.join(os.path.dirname(__file__), '..', 'redfin_logs')
+# os.makedirs(logs_dir, exist_ok=True)
+# timestamp = datetime.now().strftime("%Y%m%d %H%M%S")
+# LOG_FILE = os.path.join(logs_dir, f'spider_{timestamp}.log')
 
 LOG_LEVEL = 'INFO'
 LOG_STDOUT = True
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
-LOG_FILE = os.path.join(logs_dir, f'spider_{timestamp}.log')
 LOG_FILE_APPEND = False
-LOG_STDOUT = True
