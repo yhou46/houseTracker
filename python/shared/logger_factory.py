@@ -189,15 +189,19 @@ def configure_logger(
         log_level: int | None = None,
         enable_console_logging: bool | None = None,
         enable_file_logging: bool | None = None,
+        override_existing_settings: bool = False,
         ) -> None:
     """
-    Reconfigure the logging system.
+    Configure the logging system.
 
     Args:
         log_file_path: New log file path
         log_level: New log level
         enable_console: Whether to enable console logging
     """
+    if _factory.configured() and not override_existing_settings:
+        return
+
     _factory.configure(
         log_dir=log_file_path,
         log_file_prefix=log_file_prefix,

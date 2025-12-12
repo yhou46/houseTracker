@@ -126,6 +126,20 @@ class RedfinSpiderMonolith(scrapy.Spider):
         """
         self.logger.info(f"Parsing search results from: {response.url}")
 
+        # Extract zip code from URL if this is a zip code search page
+        # e.g., https://www.redfin.com/zipcode/98109
+        zip_code = None
+        if '/zipcode/' in response.url:
+            try:
+                zip_code = response.url.split('/zipcode/')[1].split('/')[0]
+                self.logger.info(f"Extracted zip code from URL: {zip_code}")
+            except (IndexError, ValueError):
+                self.logger.warning(f"Failed to extract zip code from URL: {response.url}")
+
+        # Also check if zip_code was passed from previous request (for pagination)
+        if not zip_code:
+            zip_code = response.meta.get('zip_code')
+
         # Extract property links from search results
         property_links = parse_property_sublinks(response.text)
 
@@ -139,10 +153,14 @@ class RedfinSpiderMonolith(scrapy.Spider):
                 self.logger.info(f"Property link {i}: {full_url}")
 
                 # Follow the property link to parse individual property page
+                # Pass zip_code through meta so it's available in parse_property_page
                 yield scrapy.Request(
                     url=full_url,
                     callback=self.parse_property_page, # type: ignore[arg-type]
-                    meta={'original_url': full_url}
+                    meta={
+                        'original_url': full_url,
+                        'zip_code': zip_code  # Pass zip code through meta
+                    }
                 )
             else:
                 self.logger.warning(f"Skipping invalid link {i}: {link}")
@@ -179,6 +197,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
                 yield scrapy.Request(
                     url=next_url,
                     callback=self.parse_search_results, # type: ignore[arg-type]
+                    meta={'zip_code': zip_code}  # Preserve zip code for pagination
                 )
             else:
                 self.logger.info(f"No next page found - current page {current_page} is the last page")
@@ -206,10 +225,36 @@ class RedfinSpiderMonolith(scrapy.Spider):
         for key, value in parsed_data.items():
             item[key] = value
 
+        # Extract zip code using hybrid approach:
+        # 1. First try to get from request meta (from URL-based search)
+        zip_code = response.meta.get('zip_code')
+
+        # 2. If not available, try to extract from address (for city-based searches or fallback)
+        # Address format: "10508 135th Pl NE #37, Kirkland, WA 98033"
+        # Zip code is the last entry when split by whitespace
+        if not zip_code:
+            address = item.get('address', '')
+            if address:
+                address_parts = address.split()
+                if address_parts:
+                    zip_code = address_parts[-1]
+                    # Remove any trailing punctuation (e.g., comma, period)
+                    zip_code = zip_code.rstrip(',.')
+                    self.logger.debug(f"Extracted zip code from address: {zip_code}")
+
+        # 3. Add zip code to item
+        if zip_code:
+            item['zipCode'] = zip_code
+        else:
+            # Last resort: use 'unknown' if zip code cannot be determined
+            item['zipCode'] = 'unknown'
+            self.logger.warning(f"No zip code found for property: {item.get('address', 'Unknown address')}")
+
         # Log the extracted data
         self.logger.info(f"Extracted property: {item.get('address', 'Unknown address')}")
         self.logger.info(f"  - Redfin ID: {item.get('redfinId')}")
         self.logger.info(f"  - Area: {item.get('area')} sq ft")
+        self.logger.info(f"  - Zip Code: {item.get('zipCode')}")
 
         yield item
 
