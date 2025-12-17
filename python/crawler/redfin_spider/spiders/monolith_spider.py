@@ -7,10 +7,19 @@ from typing import (
 
 import scrapy
 from scrapy.http import Response, Request
+from scrapy.exceptions import DropItem
 
 from ..items import RedfinPropertyItem
-from .monolith_config import ZIP_CODES, REDFIN_ZIP_URL_FORMAT, CITY_URL_MAP, ENABLE_BROWSER_RENDERING
+from .monolith_config import (
+    ZIP_CODES,
+    REDFIN_ZIP_URL_FORMAT,
+    CITY_URL_MAP,
+    ENABLE_BROWSER_RENDERING,
+    AWS_S3_BUCKET_NAME,
+    AWS_REGION,
+    )
 from ..redfin_parser import parse_property_page, parse_property_sublinks
+from shared.logger_factory import configure_logger
 
 class RedfinSpiderMonolith(scrapy.Spider):
     """
@@ -40,6 +49,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
         # Pipelines
         "ITEM_PIPELINES": {
             "redfin_spider.pipelines.JsonlPipeline": 300,
+            "redfin_spider.pipelines.AwsS3Pipeline": 301,
         },
 
         # Playwright specific settings
@@ -58,7 +68,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
 
         # Customized settings
         # "JSONL_OUTPUT_DIR": "redfin_output",
-        "JSONL_OUTPUT_FILE": None, # Will use timestamp-based filename if None
+        "JSONL_OUTPUT_FILE": None, # Will use timestamp-based filename if None. Will be overridden later
     }
 
     @classmethod
@@ -79,6 +89,19 @@ class RedfinSpiderMonolith(scrapy.Spider):
         os.makedirs(output_directory, exist_ok=True)
         spider.settings.set(
             "JSONL_OUTPUT_DIR", output_directory, priority="spider",
+        )
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"redfin_properties_{timestamp}.jsonl"
+        spider.settings.set(
+            "JSONL_OUTPUT_FILE", output_filename, priority="spider",
+        )
+
+        # Set up AWS S3 settings
+        spider.settings.set(
+            "AWS_S3_BUCKET_NAME", AWS_S3_BUCKET_NAME, priority="spider",
+        )
+        spider.settings.set(
+            "AWS_REGION", AWS_REGION, priority="spider",
         )
 
         return spider
@@ -102,6 +125,11 @@ class RedfinSpiderMonolith(scrapy.Spider):
         # Create debug directory for saving HTML responses
         self.debug_dir = os.path.join(os.path.dirname(__file__), '..', 'debug')
         os.makedirs(self.debug_dir, exist_ok=True)
+
+        # Configure logger for other functions
+        configure_logger(
+            logger_override=self.logger
+        )
 
     async def start(self): # type: ignore[no-untyped-def]
         """Generate initial requests to start the crawling process."""
@@ -213,12 +241,16 @@ class RedfinSpiderMonolith(scrapy.Spider):
         # Save HTML response for debugging
         # self._save_html_response(response, "property_page")
 
-        # Use the parser module to extract data
-        parsed_data = parse_property_page(
-            url=response.url,
-            html_content=response.text,
-            spider_name=self.name
-        )
+        try:
+            # Use the parser module to extract data
+            parsed_data = parse_property_page(
+                url=response.url,
+                html_content=response.text,
+                spider_name=self.name
+            )
+        except Exception as error:
+            self.logger.error(f"Failed to parse property page {response.url}: {error}")
+            raise DropItem(f"Failed to parse property page {response.url}: {error}")
 
         # Create item and populate it
         item = RedfinPropertyItem()
