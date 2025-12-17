@@ -12,11 +12,21 @@ Usage:
 """
 
 import logging
+from typing import Protocol, Any
 import os
 from pathlib import Path
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
+
+class LoggerLike(Protocol):
+    def debug(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def info(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def warning(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def error(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def critical(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def log(self, level: int, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+    def setLevel(self, level: Any) -> None: ...
 
 class LoggerFactory:
     """Factory class for creating centralized loggers."""
@@ -33,6 +43,7 @@ class LoggerFactory:
         self.enable_file_logging = True
         self.max_file_size = 10 * 1024 * 1024  # 10MB
         self.backup_count = 5
+        self.logger_override: LoggerLike | None = None
 
     def _get_log_file_path(self, log_dir: str, log_file_prefix: str) -> str:
         """Get log file path from environment or use default."""
@@ -102,7 +113,7 @@ class LoggerFactory:
         """Check if the logger factory has been configured."""
         return self._configured
 
-    def get_logger(self, name: str) -> logging.Logger:
+    def get_logger(self, name: str) -> LoggerLike:
         """
         Get a logger instance for the specified module.
 
@@ -114,10 +125,17 @@ class LoggerFactory:
         """
         if not self.configured():
             raise RuntimeError("LoggerFactory is not configured yet.")
+
+        # Use override logger if provided
+        if self.logger_override:
+            return self.logger_override
+
         return logging.getLogger(name)
 
     def get_log_file_path(self) -> str:
         """Get the current log file path."""
+        if self.logger_override != None:
+            return ""
         return self.log_file_path
 
     def configure(self,
@@ -126,6 +144,7 @@ class LoggerFactory:
                    log_level: int | None = None,
                    enable_console_logging: bool | None = None,
                    enable_file_logging: bool | None = None,
+                   logger_override: LoggerLike | None = None,
                    ) -> None:
         """
         Reconfigure the logging system.
@@ -149,6 +168,9 @@ class LoggerFactory:
         if enable_file_logging != None:
             self.enable_file_logging = enable_file_logging
 
+        # Override logger if provided
+        self.logger_override = logger_override
+
         # Reconfigure root logger
         self._configure_root_logger()
         self._configured = True
@@ -158,7 +180,7 @@ class LoggerFactory:
 _factory = LoggerFactory()
 
 
-def get_logger(name: str) -> logging.Logger:
+def get_logger(name: str) -> LoggerLike:
     """
     Get a logger instance for the specified module.
 
@@ -184,13 +206,14 @@ def get_log_file_path() -> str:
 
 
 def configure_logger(
-        log_file_path: str | None = None,
-        log_file_prefix: str | None = None,
-        log_level: int | None = None,
-        enable_console_logging: bool | None = None,
-        enable_file_logging: bool | None = None,
-        override_existing_settings: bool = False,
-        ) -> None:
+    log_file_path: str | None = None,
+    log_file_prefix: str | None = None,
+    log_level: int | None = None,
+    enable_console_logging: bool | None = None,
+    enable_file_logging: bool | None = None,
+    override_existing_settings: bool = False,
+    logger_override: LoggerLike | None = None,
+    ) -> None:
     """
     Configure the logging system.
 
@@ -208,4 +231,5 @@ def configure_logger(
         log_level=log_level,
         enable_console_logging=enable_console_logging,
         enable_file_logging=enable_file_logging,
+        logger_override=logger_override,
         )
