@@ -22,3 +22,6 @@ CITY_URL_MAP: Dict[str, str] = {
 }
 
 ENABLE_BROWSER_RENDERING: bool = False  # Whether to enable Playwright for JavaScript rendering
+
+AWS_S3_BUCKET_NAME: str = "myhousetracker-99ce79"
+AWS_REGION: str = "us-west-2"

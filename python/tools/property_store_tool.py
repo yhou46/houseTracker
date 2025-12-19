@@ -22,7 +22,8 @@ from data_service.redfin_data_parser import (
     parse_raw_data_to_property,
 )
 
-def get_list_of_property_files(file_directory: str, start_file: str, end_file: str) -> List[str]:
+# TODO: move to a shared file?
+def get_list_of_files(file_directory: str, start_file: str, end_file: str) -> List[str]:
     """
     Get a sorted list of files in file_directory between start_file and end_file (inclusive).
     If start_file or end_file is not found, return an empty list.
@@ -122,7 +123,7 @@ def store_properties_to_db(
     table_name = "properties"
     region = "us-west-2"
 
-    target_files = get_list_of_property_files(property_file_dir, start_file, end_file)
+    target_files = get_list_of_files(property_file_dir, start_file, end_file)
     logger.info(f"Found {len(target_files)} files to process from {property_file_dir}")
     # Add file path to each file
     targe_files_with_path = [os.path.join(property_file_dir, f) for f in target_files]
@@ -163,10 +164,10 @@ def main() -> None:
     property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "redfin_spider_monolith_output")
 
     # Edit files below
-    start_file = "redfin_properties_20251202_194549.jsonl"
-    end_file = "redfin_properties_20251202_194549.jsonl"
+    start_file = "redfin_properties_20251218_190316.jsonl"
+    end_file = "redfin_properties_20251218_190316.jsonl"
 
-    files = get_list_of_property_files(property_data_dir, start_file, end_file)
+    files = get_list_of_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")
     logger.info(f"Files: {files}")
 

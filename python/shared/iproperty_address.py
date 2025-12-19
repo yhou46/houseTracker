@@ -4,6 +4,8 @@ import logging
 
 import usaddress # type: ignore[import-untyped]
 
+from .logger_factory import get_logger
+
 # USPS standard abbreviations for street suffixes and directionals
 suffix_abbr = {
     "street": "St",
@@ -98,6 +100,9 @@ def preprocess_address_str(address_str: str) -> str:
     Returns:
         Preprocessed address string
     """
+
+    logger = get_logger(__name__)
+
     # Handle cases like: 11170 (HS 24) NE 134th Ct NE, Redmond, WA 98052
     # Make it to be 11170 NE 134th Ct NE (HomeSite 24), Redmond, WA 98052
     start_idx = 0
@@ -110,7 +115,7 @@ def preprocess_address_str(address_str: str) -> str:
         content = address_str[open_idx + 1:close_idx].strip()
 
         # Check if content starts with "HS"
-        if content.startswith("HS"):
+        if content.lower().startswith("hs") or content.lower().startswith("lot"):
             # Find the comma that separates street address from city/state/zip
             comma_idx = address_str.find(",", close_idx)
             if comma_idx != -1 and close_idx < comma_idx:
@@ -122,21 +127,26 @@ def preprocess_address_str(address_str: str) -> str:
                 other_part = address_str[comma_idx:]
 
                 # Remove the (HS ...) from the beginning and add it to the end of street
-                homesite_part = f"({content})"  # Keep original HS, don't convert to HomeSite yet
+                unit_part = f"({content})"  # Keep original HS, don't convert to HomeSite yet
 
-                print(f"street part: {parts_before_parenthesis}, other_part: {other_part}, content: {content}")
+                logger.debug(f"street part: {parts_before_parenthesis}, other_part: {other_part}, content: {content}")
 
-                # Reconstruct: street + homesite + city
-                if address_str_has_unit_info(address_str):
+                # If unit info already present outside of the parenthesis, skip adding unit part
+                if address_str_has_unit_info(parts_before_parenthesis) or address_str_has_unit_info(parts_after_parenthesis):
                     address_str = f"{parts_before_parenthesis}{parts_after_parenthesis}{other_part}"
                 else:
-                    address_str = f"{parts_before_parenthesis}{parts_after_parenthesis} {homesite_part}{other_part}"
+                    address_str = f"{parts_before_parenthesis}{parts_after_parenthesis} {unit_part}{other_part}"
 
-                # Convert HS to HomeSite in the moved part
-                address_str = address_str.replace("HS", "APT", 1)
+                # Convert non standard unit indicators to APT
                 address_str = address_str.replace("#", "", 1)
-        # TODO: handle private lane cases:
-        # example:
+                if content.lower().startswith("hs"):
+                    address_str = address_str.replace("HS", "APT", 1)
+
+                elif content.lower().startswith("lot"):
+                    address_str = address_str.replace("Lot", "APT", 1)
+
+
+        # Completely remove private lane if in paranthesis
         # 8533 NE Juanita Dr (Private Lane), Kirkland, WA 98034 should be
         # 8533 NE Juanita Dr, Kirkland, WA 98034
         elif content.lower() == "private lane":
@@ -144,14 +154,11 @@ def preprocess_address_str(address_str: str) -> str:
             parts_after_parenthesis = address_str[close_idx+1:]
             address_str = f"{parts_before_parenthesis}{parts_after_parenthesis}"
 
-
-            # Update start index to continue searching
-            # start_idx = len(street_part) + len(homesite_part) + 1
-
     # Remove remaining parentheses (for other cases)
     address_str = address_str.replace("(", "")
     address_str = address_str.replace(")", "")
 
+    logger.debug(f"Preprocessed address: {address_str}")
     return address_str
 
 # TODO: create address parsing error

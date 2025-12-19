@@ -1,8 +1,17 @@
 import unittest
 from shared.iproperty_address import get_address_hash
 from typing import List, Tuple
+import logging
+
+from shared.logger_factory import configure_logger
 
 class TestGetAddressHash(unittest.TestCase):
+
+    def setUp(self) -> None:
+        configure_logger(
+            log_level=logging.DEBUG,
+        )
+
     def test_normal_addresses(self) -> None:
         test_addresses: List[Tuple[str, str]] = [
             ("1838 Market St, Kirkland, WA 98033", "1838-market-st|kirkland|wa|98033"),
@@ -59,6 +68,7 @@ class TestGetAddressHash(unittest.TestCase):
             ("13426 (HS 2) NE 112th Pl, Redmond, WA 98052", "13426-ne-112th-pl|apt-2|redmond|wa|98052"),
             ("13472 (HS 8) NE 112th Pl, Redmond, WA 98052", "13472-ne-112th-pl|apt-8|redmond|wa|98052"),
             ("13434 (HS 3) NE 112th Pl, Redmond, WA 98052", "13434-ne-112th-pl|apt-3|redmond|wa|98052"),
+            ("7223 NE 118th (Lot #6) Ct, Kirkland, WA 98034", "7223-ne-118th-ct|apt-6|kirkland|wa|98034"),
 
             # Duplicate unit cases, remove (HS xx) if unit info already present
             ("10814 (HS 65) 120TH Ln NE Unit E, Kirkland, WA 98033", "10814-120th-ln-ne|apt-e|kirkland|wa|98033"),

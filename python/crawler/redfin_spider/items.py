@@ -26,3 +26,4 @@ class RedfinPropertyItem(scrapy.Item):
     redfinId = scrapy.Field()
     scrapedAt = scrapy.Field()
     spiderName = scrapy.Field()
+    zipCode = scrapy.Field()  # Zip code extracted from URL or address

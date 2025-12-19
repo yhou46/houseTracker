@@ -18,19 +18,6 @@ import shared.logger_factory as logger_factory
 from data_service.dynamodb_property_service import DynamoDBPropertyService
 
 
-def setup_logging() -> logging.Logger:
-    """Set up logging configuration for the tool."""
-
-    logger_factory.configure_logger(
-        enable_file_logging = False,
-        enable_console_logging= True,
-        log_level=logging.INFO,
-    )
-
-    logger = logger_factory.get_logger(__name__)
-    return logger
-
-
 def format_property_summary(property_obj: IProperty) -> str:
     """Format property information as a summary using the property's __str__ method."""
     return f"Property Details:\n================\n{str(property_obj)}"
@@ -85,8 +72,10 @@ def format_property_json(property_obj: IProperty) -> str:
     }
     return json.dumps(property_dict, indent=2)
 
-def query_property_by_id(service: DynamoDBPropertyService, property_id: str, logger: logging.Logger) -> IProperty | None:
+def query_property_by_id(service: DynamoDBPropertyService, property_id: str) -> IProperty | None:
     """Query property by ID."""
+
+    logger = logger_factory.get_logger(__name__)
     try:
         logger.info(f"Querying property by ID: {property_id}")
         return service.get_property_by_id(property_id)
@@ -95,8 +84,10 @@ def query_property_by_id(service: DynamoDBPropertyService, property_id: str, log
         raise
 
 
-def query_property_by_address(service: DynamoDBPropertyService, address_str: str, logger: logging.Logger) -> IProperty | None:
+def query_property_by_address(service: DynamoDBPropertyService, address_str: str) -> IProperty | None:
     """Query property by address."""
+
+    logger = logger_factory.get_logger(__name__)
     try:
         logger.info(f"Querying property by address: {address_str}")
         address = IPropertyAddress(address_str)
@@ -168,9 +159,12 @@ Examples:
     args = parser.parse_args()
 
     # Set up logging
-    logger = setup_logging()
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
+    logger_factory.configure_logger(
+        enable_file_logging = False,
+        enable_console_logging= True,
+        log_level=logging.INFO,
+    )
+    logger = logger_factory.get_logger(__name__)
 
     try:
         # Initialize DynamoDB service
@@ -180,9 +174,9 @@ Examples:
         # Query property
         property_obj = None
         if args.id:
-            property_obj = query_property_by_id(service, args.id, logger)
+            property_obj = query_property_by_id(service, args.id)
         elif args.address:
-            property_obj = query_property_by_address(service, args.address, logger)
+            property_obj = query_property_by_address(service, args.address)
 
         # Handle results
         if property_obj is None:
