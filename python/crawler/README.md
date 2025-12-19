@@ -19,6 +19,11 @@ cd python/crawler
 python -m scrapy crawl redfin_spider_monolith -s CLOSESPIDER_ITEMCOUNT=1
 ```
 
+## Pipelines
+
+### AWS S3
+It uploads data to S3 based on zip code.
+
 ## Run test
 1. Need to set up PYTHONPATH
     ```shell

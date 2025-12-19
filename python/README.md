@@ -117,18 +117,27 @@ Consume raw data, convert it to more structured data and store data into a DB
 - RawDataStorage
 Store raw data for record keeping and message playback
 
+### Data fetch flow on AWS
+
+- Lambdas: trigger daily and store start URLs in Redis Stream, also trigger ECS Fargate
+- ECS Fargate: spiders read start urls from Redis Stream (URL topic) and start parsing, store raw data to S3 and Redis Stream(raw data topic)
+- ECS Fargate: another container to read from Redis stream (raw data topic), parse it and store into DB
+
+
 ## Data update flow for active properties in DB
 It is to get in market property and update its state.
 
 ```
 Database
-    |-> ScanService
+    |-> ScanService (the update logic is different so cannot simply reuse the crawler logic)
             |-> PropertyUrlQueue
                     |-> PropertyCrawler
                             |-> RawPropertyDataQueue
                                     |-> DbService
                                             |-> Database
 ```
+
+ECS fargate: container to read from DB, fetch data one more time and update DB
 
 - ScanService
 Query DB to get list of in market property, request URL and update its status

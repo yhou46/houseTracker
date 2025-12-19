@@ -247,8 +247,8 @@ def main() -> None:
     )
     scan_and_update2(
         query,
-        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20251202_205748.txt",
-        # last_evaluated_property_id = "26ae0202-a10c-4c70-83d3-929336db01b2",
+        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20251216_205558.txt",
+        # last_evaluated_property_id = "c01198bb-7a2b-4196-a820-6854dcbaedb1",
     )
 
 
