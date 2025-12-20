@@ -12,7 +12,7 @@ from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 
 # houseTracker imports
-from data_service.aws_s3_util import upload_json_objects
+from shared.aws_s3_util import upload_json_objects
 
 
 
