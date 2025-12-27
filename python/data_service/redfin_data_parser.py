@@ -445,12 +445,17 @@ def parse_property_type(property_type_str: str | None) -> PropertyType:
 
 # TODO: complete this function
 # Currently only update history for ListRemoved status
-def correct_property_history(old_status: PropertyStatus, new_status: PropertyStatus, history: IPropertyHistory) -> None:
+def correct_property_history(
+        old_status: PropertyStatus,
+        new_status: PropertyStatus,
+        history: IPropertyHistory,
+        last_updated: datetime,
+        ) -> None:
     """
     Correct property history based on status change
     """
     logger = logger_factory.get_logger(__name__)
-    date_comparison_threshold = timedelta(days=2)
+
     if new_status == PropertyStatus.ListRemoved:
         should_add_event = False
         recent_list_event_date = None
@@ -466,17 +471,19 @@ def correct_property_history(old_status: PropertyStatus, new_status: PropertySta
             if recent_list_event_date and recent_list_removed_event_date:
                 break
 
-        # This should not happen, but just in case
         if recent_list_event_date is None:
-            logger.warning(f"Warning: No listed event found in history when correcting to ListRemoved status, address: {history.address}")
-            return
-
-        if recent_list_removed_event_date is None or recent_list_removed_event_date < recent_list_event_date:
-            # No list removed event found, need to add one
-            should_add_event = True
+            if len(history.history) > 0:
+                logger.warning(f"Warning: No listed event found in history when correcting to ListRemoved status, address: {history.address}")
+                should_add_event = False
+            else:
+                # For empty history, add list removed event
+                should_add_event = True
+        elif recent_list_removed_event_date is None or recent_list_removed_event_date < recent_list_event_date:
+                # No list removed event found, need to add one
+                should_add_event = True
 
         if should_add_event:
-            list_removed_date = history.last_updated
+            list_removed_date = last_updated
 
             # Calculate list removed date based on next event after listed event
             if recent_list_event_index > 0 and recent_list_event_index + 1 < len(history.history):
@@ -525,7 +532,7 @@ def update_property_from_raw_data(
 
     new_status = parse_property_status(status_raw_str, existing_property.history)
     if new_status != existing_property.status:
-        logger.info(f"Property status changed from {existing_property.status} to {new_status} for address: {existing_property.address}")
+        logger.info(f"Property status changed from {existing_property.status} to {new_status} for address: {existing_property.address}, id: {existing_property.id}")
         existing_property.metadata.update_status(new_status)
 
         # Reset property price if property is sold
@@ -536,7 +543,9 @@ def update_property_from_raw_data(
             existing_property.status,
             new_status,
             existing_property.history,
+            last_updated,
         )
+        logger.info(f"Updated property after correction: {existing_property.metadata}, history: {existing_property.history}")
 
     return existing_property.metadata, existing_property.history
 
