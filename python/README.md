@@ -71,6 +71,12 @@ pipenv run python ./shared/test/iproperty.test.py
 mypy ./
 ```
 
+# Run in docker mode
+```shell
+# Run in dev mode
+docker compose -f docker-compose.dev.yml up
+```
+
 # Update python version in pipenv
 
 1. Remove the environment

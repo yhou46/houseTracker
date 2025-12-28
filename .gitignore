@@ -180,3 +180,4 @@ python/crawler/**/*_output
 python/crawler/**/*_logs
 python/**/error_logs
 python/crawler/**/logs
+python/**/*.secret.*
