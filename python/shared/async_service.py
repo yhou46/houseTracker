@@ -24,6 +24,9 @@ class AsyncService(ABC):
         """Check if the service is currently running"""
         pass
 
+# Global flag to ensure run_async_service is only called once per thread
+_RUN_ASYNC_SERVICE_CALLED = False
+
 async def run_async_service(
     start_handler: Callable[[], Awaitable[Any]],
     shutdown_handler: Callable[[], Awaitable[None]],
@@ -35,6 +38,7 @@ async def run_async_service(
     Run an async service until shutdown signal received.
     Service creation, startup and shutdown are fully controlled by the caller.
     It only provides the shutdown signal handling and prevent program from exiting when no shutdown signal is received.
+    It should only be called once per thread.
 
     Args:
         start_handler: Async callable that creates and starts services
@@ -46,6 +50,11 @@ async def run_async_service(
     Returns:
         Exit code (0 for success, non-zero for errors)
     """
+    global _RUN_ASYNC_SERVICE_CALLED
+    if _RUN_ASYNC_SERVICE_CALLED:
+        raise RuntimeError("run_async_service can only be called once per thread")
+    _RUN_ASYNC_SERVICE_CALLED = True
+
     logger = get_logger(__name__)
     service = None
     shutdown_event = asyncio.Event()
