@@ -505,6 +505,7 @@ def correct_property_history(
             logger.info(f"Correcting property history by adding event: {list_removed_event}, address: {history.address}")
             history.addEvent(list_removed_event)
 
+# TODO: handle metadata change? Like address or property type change.
 def update_property_from_raw_data(
         raw_data: RawPropertyData,
         existing_property: IProperty,

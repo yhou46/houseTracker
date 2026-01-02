@@ -7,6 +7,7 @@ from typing import (
     TypedDict,
     TypeAlias,
     Tuple,
+    Union,
 )
 from dataclasses import dataclass
 
@@ -33,6 +34,9 @@ Redis stream consumer:
 - It should get pending messages (message delivered but not processed yet) from other consumers in the same consumer group.
 
 """
+
+RedisFieldType = Union[bytes, bytearray, memoryview, str, int, float]
+RedisFields = dict[RedisFieldType, RedisFieldType]
 
 class RedisConfig:
     def __init__(
@@ -126,11 +130,6 @@ class RedisStreamTrimmer(AsyncService):
             f"Started stream trimmer: interval={self.config.trim_interval_seconds}s, "
             f"maxlen={self.config.trim_max_len}"
         )
-
-    async def wait_until_stopped(self) -> None:
-        """Wait until the trimmer is stopped"""
-        if self._running and self._task:
-            await self._task
 
     async def stop(self) -> None:
         """Stop the trimming task"""
@@ -325,30 +324,28 @@ class RedisStreamConsumer(AsyncService):
         trimmer_config: RedisStreamTrimConfig,
         trim_trigger: RedisStreamTrimTriggerFunction,
         redis_client: redisAsync.Redis,
-        message_handler: RedisStreamMessageHandler
+        message_handler: RedisStreamMessageHandler,
+        debug: bool = False,
     ):
-        self.consumer_config = consumer_config
-        self.trimmer_config = trimmer_config
+        self._consumer_config = consumer_config
+        self._trimmer_config = trimmer_config
         self._redis_client = redis_client
-        self.message_handler = message_handler
+        self._message_handler = message_handler
+        self._debug = debug
 
         self.logger = logger_factory.get_logger(__name__)
 
-        # Redis client (will be initialized in start())
-        # self.redis: Optional[Redis] = None
-
         # Consumer identity
-        self.consumer_name = self._generate_consumer_name()
+        self._consumer_name = self._generate_consumer_name()
 
         # State management
         self._running = False
-        # self._shutdown_event = asyncio.Event()
         self._tasks: List[asyncio.Task[None]] = []
 
         # Stream trimmer
-        self.trimmer = RedisStreamTrimmer(
+        self._trimmer = RedisStreamTrimmer(
             redis_client,
-            self.trimmer_config,
+            self._trimmer_config,
             trim_trigger,
         )
 
@@ -370,7 +367,7 @@ class RedisStreamConsumer(AsyncService):
             self.logger.warning("Consumer already running")
             return
 
-        self.logger.info(f"Starting consumer: {self.consumer_name}")
+        self.logger.info(f"Starting consumer: {self._consumer_name}")
 
         # Ensure consumer group exists
         await self._ensure_consumer_group()
@@ -383,7 +380,7 @@ class RedisStreamConsumer(AsyncService):
         self.metrics["started_at"] = datetime.datetime.now(datetime.UTC)
 
         # Start trimmer
-        await self.trimmer.start()
+        await self._trimmer.start()
 
         # Create consumer tasks
         reader_task = asyncio.create_task(self._read_new_messages())
@@ -393,9 +390,9 @@ class RedisStreamConsumer(AsyncService):
         # self._tasks = [reader_task]
 
         self.logger.info(
-            f"Consumer started: stream={self.consumer_config.stream_name}, "
-            f"group={self.consumer_config.consumer_group}, "
-            f"consumer={self.consumer_name}"
+            f"Consumer started: stream={self._consumer_config.stream_name}, "
+            f"group={self._consumer_config.consumer_group}, "
+            f"consumer={self._consumer_name}"
         )
 
     async def stop(self) -> None:
@@ -404,8 +401,8 @@ class RedisStreamConsumer(AsyncService):
         self._running = False
 
         # Stop trimmer
-        if self.trimmer:
-            await self.trimmer.stop()
+        if self._trimmer:
+            await self._trimmer.stop()
 
         # Cancel all tasks
         for task in self._tasks:
@@ -416,7 +413,7 @@ class RedisStreamConsumer(AsyncService):
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*self._tasks, return_exceptions=True),
-                    timeout=self.consumer_config.shutdown_grace_period_seconds
+                    timeout=self._consumer_config.shutdown_grace_period_seconds
                 )
             except asyncio.TimeoutError:
                 self.logger.warning("Some tasks did not complete within grace period")
@@ -440,7 +437,7 @@ class RedisStreamConsumer(AsyncService):
         timestamp = int(datetime.datetime.now(datetime.UTC).timestamp())
         unique_id = str(uuid.uuid4())[:8]
 
-        return f"{self.consumer_config.consumer_name_prefix}-{timestamp}-{unique_id}"
+        return f"{self._consumer_config.consumer_name_prefix}-{timestamp}-{unique_id}"
 
     async def _ensure_consumer_group(self) -> None:
         """Ensure consumer group exists, create if not"""
@@ -448,16 +445,16 @@ class RedisStreamConsumer(AsyncService):
             # Try to create consumer group starting from beginning (0)
             # Use '0' to process all messages, or '$' for only new messages
             await self._redis_client.xgroup_create(
-                name=self.consumer_config.stream_name,
-                groupname=self.consumer_config.consumer_group,
+                name=self._consumer_config.stream_name,
+                groupname=self._consumer_config.consumer_group,
                 id='0',  # Start from beginning
                 mkstream=True  # Create stream if doesn't exist
             )
-            self.logger.info(f"Created consumer group: {self.consumer_config.consumer_group}")
+            self.logger.info(f"Created consumer group: {self._consumer_config.consumer_group}")
         except ResponseError as error:
             self.logger.error(f"ResponseError when creating consumer group: {error}")
             if "BUSYGROUP" in str(error):
-                self.logger.info(f"Consumer group already exists: {self.consumer_config.consumer_group}")
+                self.logger.info(f"Consumer group already exists: {self._consumer_config.consumer_group}")
             else:
                 raise
 
@@ -470,11 +467,11 @@ class RedisStreamConsumer(AsyncService):
                 # Read new messages using XREADGROUP
                 # '>' means only new messages that haven't been delivered to any consumer
                 response = await self._redis_client.xreadgroup(
-                    groupname=self.consumer_config.consumer_group,
-                    consumername=self.consumer_name,
-                    streams={self.consumer_config.stream_name: '>'},
-                    count=self.consumer_config.count,
-                    block=self.consumer_config.block_ms
+                    groupname=self._consumer_config.consumer_group,
+                    consumername=self._consumer_name,
+                    streams={self._consumer_config.stream_name: '>'},
+                    count=self._consumer_config.count,
+                    block=self._consumer_config.block_ms
                 )
 
                 self.logger.info(
@@ -498,17 +495,17 @@ class RedisStreamConsumer(AsyncService):
 
         while self._running:
             try:
-                await asyncio.sleep(self.consumer_config.claim_interval_seconds)
+                await asyncio.sleep(self._consumer_config.claim_interval_seconds)
 
                 # Use XAUTOCLAIM to claim old pending messages
                 # Returns: [next_id, claimed_messages, deleted_message_ids]
                 response = await self._redis_client.xautoclaim(
-                    name=self.consumer_config.stream_name,
-                    groupname=self.consumer_config.consumer_group,
-                    consumername=self.consumer_name,
-                    min_idle_time=self.consumer_config.claim_idle_ms,
+                    name=self._consumer_config.stream_name,
+                    groupname=self._consumer_config.consumer_group,
+                    consumername=self._consumer_name,
+                    min_idle_time=self._consumer_config.claim_idle_ms,
                     start_id='0-0',  # Start from beginning
-                    count=self.consumer_config.claim_count
+                    count=self._consumer_config.claim_count
                 )
 
                 # Result format: (next_id, claimed_messages)
@@ -518,7 +515,7 @@ class RedisStreamConsumer(AsyncService):
                 if claimed_messages:
                     self.logger.info(f"Claimed {len(claimed_messages)} pending messages")
                     # Format as expected by _process_messages
-                    formatted = [(self.consumer_config.stream_name, claimed_messages)]
+                    formatted = [(self._consumer_config.stream_name, claimed_messages)]
                     await self._process_response(formatted, is_claimed=True)
 
             except asyncio.CancelledError:
@@ -531,10 +528,11 @@ class RedisStreamConsumer(AsyncService):
     async def _process_response(self, response: XReadGroupResponseResp2, is_claimed: bool) -> None:
         """Process a batch of messages"""
 
-        is_valid_response_format = validate_xreadgroup_response(response)
-        self.logger.info(f"Validate response: {validate_xreadgroup_response(response)}")
-        if not is_valid_response_format:
-            raise ValueError("Invalid XREADGROUP response format")
+        if self._debug:
+            is_valid_response_format = validate_xreadgroup_response(response)
+            self.logger.info(f"Validate response: {validate_xreadgroup_response(response)}")
+            if not is_valid_response_format:
+                raise ValueError("Invalid XREADGROUP response format")
 
         messages = convert_xreadgroup_response(response)
         for message in messages:
@@ -559,16 +557,16 @@ class RedisStreamConsumer(AsyncService):
 
             # Process with timeout
             success = await asyncio.wait_for(
-                self.message_handler(message),
-                timeout=self.consumer_config.processing_timeout_seconds
+                self._message_handler(message),
+                timeout=self._consumer_config.processing_timeout_seconds
             )
 
             if success:
                 # Acknowledge the message (removes from PEL)
                 # TODO: should we do multi ACK for batch processing?
                 await self._redis_client.xack(
-                    self.consumer_config.stream_name,
-                    self.consumer_config.consumer_group,
+                    self._consumer_config.stream_name,
+                    self._consumer_config.consumer_group,
                     message_id,
                 )
 
@@ -586,7 +584,7 @@ class RedisStreamConsumer(AsyncService):
         except asyncio.TimeoutError:
             self.logger.error(
                 f"Message processing timeout: {message_id} "
-                f"(>{self.consumer_config.processing_timeout_seconds}s)"
+                f"(>{self._consumer_config.processing_timeout_seconds}s)"
             )
             self.metrics["messages_failed"] += 1
             # Don't ACK - let it be reclaimed
@@ -606,17 +604,17 @@ class RedisStreamConsumer(AsyncService):
         if self._redis_client:
             try:
                 # Add stream info
-                stream_len = await self._redis_client.xlen(self.consumer_config.stream_name)
+                stream_len = await self._redis_client.xlen(self._consumer_config.stream_name)
                 metrics["stream_length"] = stream_len
 
                 # Add pending count for this consumer
                 pending_info = await self._redis_client.xpending_range(
-                    name=self.consumer_config.stream_name,
-                    groupname=self.consumer_config.consumer_group,
+                    name=self._consumer_config.stream_name,
+                    groupname=self._consumer_config.consumer_group,
                     min='-',
                     max='+',
                     count=1,
-                    consumername=self.consumer_name
+                    consumername=self._consumer_name
                 )
                 metrics["pending_count"] = len(pending_info)
 
