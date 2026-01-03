@@ -8,7 +8,7 @@ from datetime import datetime
 
 from redis.asyncio import Redis
 
-import shared.redis_util as redis_util
+import shared.redis_stream_util as redis_stream_util
 from shared.logger_factory import configure_logger
 from shared.async_service import run_async_service
 
@@ -35,7 +35,7 @@ async def produce_messages(redis_client: Redis, message_count: int) -> None:
             message_id = await redis_client.xadd(
                 'mystream',  # stream name
                 #
-                fields=cast(redis_util.RedisFields, message)      # message data
+                fields=cast(redis_stream_util.RedisFields, message)      # message data
             )
 
             print(f"Produced: {message_id} - {message}")
@@ -57,9 +57,9 @@ async def trim_stream(
 
         return True
 
-    trimmer = redis_util.RedisStreamTrimmer(
+    trimmer = redis_stream_util.RedisStreamTrimmer(
         redis,
-        redis_util.RedisStreamTrimConfig(
+        redis_stream_util.RedisStreamTrimConfig(
             stream_name=stream_name,
             trim_interval_seconds=1 * 60,  # Trim every 1 minute
             trim_max_len=max_len,
@@ -78,27 +78,27 @@ async def consume_stream(
 ) -> None:
     """Async Redis stream consumer"""
 
-    trim_config = redis_util.RedisStreamTrimConfig(
+    trim_config = redis_stream_util.RedisStreamTrimConfig(
             stream_name=stream_name,
             trim_interval_seconds=30,  # Trim every 2 seconds
             trim_max_len=max_stream_size,
             trim_approximate=approximate
     )
 
-    consumer_config = redis_util.RedisStreamConsumerConfig(
+    consumer_config = redis_stream_util.RedisStreamConsumerConfig(
         stream_name=stream_name,
         consumer_group="my_consumer_group",
         consumer_name_prefix="consumer",
     )
 
-    async def message_handler(message: redis_util.RedisStreamMessage) -> bool:
+    async def message_handler(message: redis_stream_util.RedisStreamMessage) -> bool:
         print(f"Consumed message: {message}")
         return True  # Acknowledge message
 
-    consumer = redis_util.RedisStreamConsumer(
+    consumer = redis_stream_util.RedisStreamConsumer(
         consumer_config,
         trim_config,
-        redis_util.always_trim,
+        redis_stream_util.always_trim,
         redis_client,
         message_handler,
     )

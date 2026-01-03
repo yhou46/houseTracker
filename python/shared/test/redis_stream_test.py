@@ -6,7 +6,7 @@ from typing import Any, List, cast
 
 from redis.asyncio import Redis
 
-from shared.redis_util import RedisStreamTrimmer, RedisStreamTrimConfig, always_trim, RedisFields
+from shared.redis_stream_util import RedisStreamTrimmer, RedisStreamTrimConfig, always_trim, RedisFields
 from shared.logger_factory import configure_logger, get_logger
 
 
