@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Awaitable, Any
+from typing import Callable, Awaitable, Any, List
 import signal
 import asyncio
 
@@ -37,7 +37,7 @@ async def run_async_service(
     """
     Run an async service until shutdown signal received.
     Service creation, startup and shutdown are fully controlled by the caller.
-    It only provides the shutdown signal handling and prevent program from exiting when no shutdown signal is received.
+    It only provides the shutdown signal handling and prevent program from exiting when no shutdown signal is received. It also exits when there are no pending tasks in the background.
     It should only be called once per thread.
 
     Args:
@@ -83,8 +83,34 @@ async def run_async_service(
             service = await start_handler()
         logger.info("Service(s) started successfully")
 
-        # Wait for shutdown signal
-        await shutdown_event.wait()
+        # Get all current tasks except the current one
+        current_task = asyncio.current_task()
+        tasks = [t for t in asyncio.all_tasks() if t != current_task]
+
+        # Race between:
+        # 1. All tasks completing naturally (self-termination, idle timeout, etc.)
+        # 2. Shutdown signal being received
+        # Note: tasks are already Task objects, so gather() returns an awaitable, not a coroutine
+        # We can directly await them without wrapping in create_task
+        async def wait_for_all_tasks() -> List[Any]:
+            return await asyncio.gather(*tasks, return_exceptions=True)
+
+        task_waiter = asyncio.create_task(wait_for_all_tasks())
+        signal_waiter = asyncio.create_task(shutdown_event.wait())
+
+        # Wait for whichever happens first
+        done, pending = await asyncio.wait(
+            {task_waiter, signal_waiter},
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        # Cancel the waiter we don't need anymore
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
         # Graceful shutdown
         logger.info("Shutting down service...")
@@ -113,13 +139,13 @@ async def run_async_service(
             loop.remove_signal_handler(sig)
 
         # Emergency shutdown if service exists but shutdown failed
-        if service is not None and shutdown_event.is_set() and not shutdown_completed:
+        if service is not None and not shutdown_completed:
             logger.info("Performing emergency shutdown...")
             try:
                 # Give one last chance for cleanup
                 await asyncio.wait_for(
                     shutdown_handler(),
-                    timeout=5.0
+                    timeout=5.0,
                 )
-            except Exception as e:
-                logger.error(f"Emergency shutdown failed: {e}")
+            except Exception as error:
+                logger.error(f"Emergency shutdown failed: {error}")

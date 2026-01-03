@@ -125,6 +125,7 @@ class RedisStreamTrimmer(AsyncService):
             return
 
         self._running = True
+        # TODO: handle task exception? currently exception are hidden and only print out when main program exits
         self._task = asyncio.create_task(self._trim_loop())
         self.logger.info(
             f"Started stream trimmer: interval={self.config.trim_interval_seconds}s, "
@@ -167,8 +168,9 @@ class RedisStreamTrimmer(AsyncService):
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                self.logger.error(f"Error in trim loop: {e}", exc_info=True)
+            except Exception as error:
+                self.logger.error(f"Error in trim loop: {error}", exc_info=True)
+                raise error
 
     async def _trim_stream(self) -> None:
         """Execute XTRIM on the stream"""
@@ -205,8 +207,8 @@ class RedisStreamTrimmer(AsyncService):
                 f"removed={result}, elapsed={elapsed:.3f}s"
             )
 
-        except Exception as e:
-            self.logger.error(f"Failed to trim stream: {e}", exc_info=True)
+        except Exception as error:
+            self.logger.error(f"Failed to trim stream: {error}", exc_info=True)
 
     async def force_trim(self) -> None:
         """Force an immediate trim (for testing/manual trigger)"""
@@ -239,6 +241,9 @@ class RedisStreamConsumerConfig:
 
     # Graceful shutdown
     shutdown_grace_period_seconds: int = 30
+
+    # Shutdown when idle
+    shutdown_when_idle_seconds: int | None = None
 
 # TODO: define Redis stream message type?
 
@@ -310,6 +315,7 @@ ConsumerMetrics = TypedDict(
         "started_at": datetime.datetime | None,
         "stream_length": int | None,
         "pending_count": int | None,
+        "idle_seconds": float | None,
     }
 )
 
@@ -356,7 +362,11 @@ class RedisStreamConsumer(AsyncService):
             "started_at": None,
             "stream_length": None,
             "pending_count": None,
+            "idle_seconds": None,
         }
+
+        # Track last message time for idle shutdown
+        self._last_message_time: float | None = None
 
     """
     Public methods
@@ -379,15 +389,24 @@ class RedisStreamConsumer(AsyncService):
         self._running = True
         self.metrics["started_at"] = datetime.datetime.now(datetime.UTC)
 
+        # Initialize idle timer
+        self._last_message_time = asyncio.get_event_loop().time()
+
         # Start trimmer
         await self._trimmer.start()
 
         # Create consumer tasks
+        # TODO: handle task exceptions? Like connnection errors
         reader_task = asyncio.create_task(self._read_new_messages())
         claimer_task = asyncio.create_task(self._claim_pending_messages())
 
         self._tasks = [reader_task, claimer_task]
         # self._tasks = [reader_task]
+
+        # Start idle monitoring if configured
+        if self._consumer_config.shutdown_when_idle_seconds is not None:
+            idle_monitor_task = asyncio.create_task(self._monitor_idle_shutdown())
+            self._tasks.append(idle_monitor_task)
 
         self.logger.info(
             f"Consumer started: stream={self._consumer_config.stream_name}, "
@@ -479,6 +498,8 @@ class RedisStreamConsumer(AsyncService):
                 )
 
                 if response:
+                    # Update last message time when messages are received
+                    self._last_message_time = asyncio.get_event_loop().time()
                     await self._process_response(response, is_claimed=False)
 
             except asyncio.CancelledError:
@@ -514,6 +535,8 @@ class RedisStreamConsumer(AsyncService):
 
                 if claimed_messages:
                     self.logger.info(f"Claimed {len(claimed_messages)} pending messages")
+                    # Update last message time when messages are claimed
+                    self._last_message_time = asyncio.get_event_loop().time()
                     # Format as expected by _process_messages
                     formatted = [(self._consumer_config.stream_name, claimed_messages)]
                     await self._process_response(formatted, is_claimed=True)
@@ -524,6 +547,48 @@ class RedisStreamConsumer(AsyncService):
                 self.logger.error(f"Error claiming messages: {e}", exc_info=True)
 
         self.logger.info("Stopped claiming pending messages")
+
+    async def _monitor_idle_shutdown(self) -> None:
+        """Monitor idle time and shutdown if threshold is exceeded"""
+        if self._consumer_config.shutdown_when_idle_seconds is None:
+            return
+
+        self.logger.info(
+            f"Started idle monitoring: shutdown_when_idle={self._consumer_config.shutdown_when_idle_seconds}s"
+        )
+
+        # Check interval - check every 30 seconds or half the idle timeout, whichever is smaller
+        min_check_interval_in_seconds = 30
+        check_interval = min(min_check_interval_in_seconds, self._consumer_config.shutdown_when_idle_seconds / 2)
+
+        while self._running:
+            try:
+                await asyncio.sleep(check_interval)
+
+                if self._last_message_time is None:
+                    continue
+
+                current_time = asyncio.get_event_loop().time()
+                idle_seconds = current_time - self._last_message_time
+
+                self.logger.debug(f"Idle time: {idle_seconds:.1f}s")
+
+                if idle_seconds >= self._consumer_config.shutdown_when_idle_seconds:
+                    self.logger.info(
+                        f"Idle timeout reached: {idle_seconds:.1f}s >= "
+                        f"{self._consumer_config.shutdown_when_idle_seconds}s. "
+                        f"Initiating graceful shutdown..."
+                    )
+                    # Trigger graceful shutdown without awaiting to avoid recursion
+                    asyncio.create_task(self.stop())
+                    break
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Error in idle monitoring: {e}", exc_info=True)
+
+        self.logger.info("Triggered consumer stop and stopped idle monitoring")
 
     async def _process_response(self, response: XReadGroupResponseResp2, is_claimed: bool) -> None:
         """Process a batch of messages"""
@@ -600,6 +665,13 @@ class RedisStreamConsumer(AsyncService):
     async def get_metrics(self) -> ConsumerMetrics:
         """Get consumer metrics"""
         metrics = self.metrics.copy()
+
+        # Calculate current idle time
+        if self._last_message_time is not None:
+            current_time = asyncio.get_event_loop().time()
+            metrics["idle_seconds"] = current_time - self._last_message_time
+        else:
+            metrics["idle_seconds"] = None
 
         if self._redis_client:
             try:
