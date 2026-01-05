@@ -92,9 +92,9 @@ async def consume_stream(
         shutdown_when_idle_seconds=60,  # Shutdown after 1 minute of idleness
     )
 
-    async def message_handler(message: redis_stream_util.RedisStreamMessage) -> bool:
+    async def message_handler(message: redis_stream_util.RedisStreamMessage) -> None:
         print(f"Consumed message: {message}")
-        return True  # Acknowledge message
+        return # Acknowledge message
 
     consumer = redis_stream_util.RedisStreamConsumer(
         consumer_config,
