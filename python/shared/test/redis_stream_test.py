@@ -566,6 +566,65 @@ class TestRedisStreamConsumer(unittest.IsolatedAsyncioTestCase):
 
         self.logger.info("Test completed successfully")
 
+    async def test_single_consumer_exception_handling(self) -> None:
+        """Test that consumer handles exceptions in message handler correctly"""
+
+        # Setup: Populate stream with messages BEFORE starting consumer
+        message_count = 10
+        await populate_stream(self.redis_client, self.stream_name, message_count)
+
+        self.logger.info(f"Populated stream with {message_count} messages")
+
+        # Create consumer with handler that always fails
+        # IMPORTANT: Disable auto-claiming to prevent messages from being claimed and failed multiple times
+        consumer = await self._create_consumer(
+            consumer_name_prefix="failing_consumer",
+            count=5,
+            block_ms=1000,
+            claim_interval_seconds=3600,  # Set to very high value to effectively disable auto-claiming during test
+            claim_idle_ms=3600000,  # 1 hour - messages won't be claimed during test
+            message_handler=self._create_tracking_handler(
+                consumer_name="failing_consumer",
+                should_fail=True,  # All messages will fail
+            ),
+        )
+
+        # Start consumer
+        await consumer.start()
+        self.assertTrue(consumer.is_running(), "Consumer should be running after start()")
+
+        # Wait a bit for consumer to attempt processing all messages
+        # Since all handlers fail, no messages will be tracked in processed_messages
+        # Give enough time for all messages to be read and fail once
+        await asyncio.sleep(3)
+
+        # Verify consumer is still running (didn't crash despite exceptions)
+        self.assertTrue(consumer.is_running(), "Consumer should still be running despite handler exceptions")
+
+        # Verify NO messages were successfully processed (none in storage)
+        processed_count = len(self.processed_messages)
+        self.assertEqual(processed_count, 0, "No messages should be tracked (all failed)")
+
+        # Verify metrics show failures (each message failed exactly once)
+        metrics = await consumer.get_metrics()
+        self.assertEqual(metrics["messages_processed"], 0, "No messages should be processed successfully")
+        self.assertEqual(metrics["messages_failed"], message_count, f"All {message_count} messages should be marked as failed once")
+        self.assertEqual(metrics["messages_claimed"], 0, "No messages should be claimed (auto-claim disabled)")
+
+        # Verify all messages are pending (not ACKed)
+        pending_count = await self._get_pending_count()
+        self.assertEqual(pending_count, message_count, f"All {message_count} messages should be pending (not ACKed)")
+
+        # Verify stream still has all messages
+        stream_length = await get_stream_length(self.redis_client, self.stream_name)
+        self.assertEqual(stream_length, message_count, "All messages remain in stream")
+
+        # Stop consumer
+        await consumer.stop()
+        self.assertFalse(consumer.is_running(), "Consumer should not be running after stop()")
+
+        self.logger.info("Test completed successfully")
+
 
 if __name__ == "__main__":
     unittest.main()
