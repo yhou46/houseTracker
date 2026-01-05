@@ -73,7 +73,7 @@ class TestRedisStreamTrimmer(unittest.IsolatedAsyncioTestCase):
         )
 
         # Test stream name (unique per test to avoid conflicts)
-        self.stream_name_prefix = "test_redis_stream"
+        self.stream_name_prefix = "test_redis_stream_trimmer"
         self.stream_name = f"{self.stream_name_prefix}_{id(self)}"
 
     async def asyncTearDown(self) -> None:
@@ -622,6 +622,222 @@ class TestRedisStreamConsumer(unittest.IsolatedAsyncioTestCase):
         # Stop consumer
         await consumer.stop()
         self.assertFalse(consumer.is_running(), "Consumer should not be running after stop()")
+
+        self.logger.info("Test completed successfully")
+
+    async def test_multiple_consumers_basic_distribution(self) -> None:
+        """Test that multiple consumers in same group distribute messages correctly"""
+
+        # Setup: Populate stream with messages BEFORE starting consumers
+        message_count = 30
+        await populate_stream(self.redis_client, self.stream_name, message_count)
+
+        self.logger.info(f"Populated stream with {message_count} messages")
+
+        # Create 3 consumers in the same consumer group
+        consumer1 = await self._create_consumer(
+            consumer_name_prefix="consumer1",
+            count=5,
+            block_ms=1000,
+        )
+
+        consumer2 = await self._create_consumer(
+            consumer_name_prefix="consumer2",
+            count=5,
+            block_ms=1000,
+        )
+
+        consumer3 = await self._create_consumer(
+            consumer_name_prefix="consumer3",
+            count=5,
+            block_ms=1000,
+        )
+
+        # Start all consumers
+        await asyncio.gather(
+            consumer1.start(),
+            consumer2.start(),
+            consumer3.start(),
+        )
+
+        self.assertTrue(consumer1.is_running(), "Consumer 1 should be running")
+        self.assertTrue(consumer2.is_running(), "Consumer 2 should be running")
+        self.assertTrue(consumer3.is_running(), "Consumer 3 should be running")
+
+        # Wait for all messages to be processed
+        success = await self._wait_for_processing(
+            expected_count=message_count,
+            timeout_seconds=20,
+        )
+        self.assertTrue(success, f"All {message_count} messages should be processed")
+
+        # Verify all messages were processed exactly once (no duplicates)
+        processed_count = len(self.processed_messages)
+        self.assertEqual(processed_count, message_count, "All messages should be processed exactly once")
+
+        # Verify messages were distributed across consumers (each consumer processed at least 1 message)
+        consumer1_count = sum(1 for msg in self.processed_messages.values() if msg['consumer_name'] == 'consumer1')
+        consumer2_count = sum(1 for msg in self.processed_messages.values() if msg['consumer_name'] == 'consumer2')
+        consumer3_count = sum(1 for msg in self.processed_messages.values() if msg['consumer_name'] == 'consumer3')
+
+        self.logger.info(f"Message distribution: consumer1={consumer1_count}, consumer2={consumer2_count}, consumer3={consumer3_count}")
+
+        # Each consumer should have processed at least some messages (not 0)
+        self.assertGreater(consumer1_count, 0, "Consumer 1 should have processed at least 1 message")
+        self.assertGreater(consumer2_count, 0, "Consumer 2 should have processed at least 1 message")
+        self.assertGreater(consumer3_count, 0, "Consumer 3 should have processed at least 1 message")
+
+        # Total should equal message count
+        self.assertEqual(consumer1_count + consumer2_count + consumer3_count, message_count,
+                        "Sum of messages processed by all consumers should equal total messages")
+
+        # Verify aggregate metrics from all consumers
+        metrics1 = await consumer1.get_metrics()
+        metrics2 = await consumer2.get_metrics()
+        metrics3 = await consumer3.get_metrics()
+
+        total_processed = metrics1["messages_processed"] + metrics2["messages_processed"] + metrics3["messages_processed"]
+        total_failed = metrics1["messages_failed"] + metrics2["messages_failed"] + metrics3["messages_failed"]
+        total_claimed = metrics1["messages_claimed"] + metrics2["messages_claimed"] + metrics3["messages_claimed"]
+
+        self.assertEqual(total_processed, message_count, "Total processed across all consumers should equal message count")
+        self.assertEqual(total_failed, 0, "No messages should fail")
+        self.assertEqual(total_claimed, 0, "No messages should be claimed (all fresh reads)")
+
+        # Verify no pending messages (all ACKed)
+        pending_count = await self._get_pending_count()
+        self.assertEqual(pending_count, 0, "No pending messages - all should be ACKed")
+
+        # Verify stream still has all messages
+        stream_length = await get_stream_length(self.redis_client, self.stream_name)
+        self.assertEqual(stream_length, message_count, "All messages remain in stream")
+
+        # Stop all consumers cleanly
+        await asyncio.gather(
+            consumer1.stop(),
+            consumer2.stop(),
+            consumer3.stop(),
+        )
+
+        self.assertFalse(consumer1.is_running(), "Consumer 1 should not be running after stop()")
+        self.assertFalse(consumer2.is_running(), "Consumer 2 should not be running after stop()")
+        self.assertFalse(consumer3.is_running(), "Consumer 3 should not be running after stop()")
+
+        self.logger.info("Test completed successfully")
+
+    async def test_multiple_consumers_failure_and_reclaim(self) -> None:
+        """Test that when one consumer fails, another consumer can claim and process pending messages"""
+
+        # Setup: Populate stream with messages BEFORE starting consumers
+        message_count = 20
+        await populate_stream(self.redis_client, self.stream_name, message_count)
+
+        self.logger.info(f"Populated stream with {message_count} messages")
+
+        # Create Consumer 1: Will fail to process all messages it receives
+        # Disable auto-claiming for consumer1 to prevent it from reclaiming its own failures
+        consumer1 = await self._create_consumer(
+            consumer_name_prefix="failing_consumer",
+            count=10,
+            block_ms=1000,
+            claim_interval_seconds=3600,  # Disable auto-claiming for consumer1
+            claim_idle_ms=3600000,
+            message_handler=self._create_tracking_handler(
+                consumer_name="failing_consumer",
+                should_fail=True,  # This consumer always fails
+            ),
+        )
+
+        # Create Consumer 2: Will successfully process messages AND claim failed messages from Consumer 1
+        # Configure to claim messages idle for more than 2 seconds
+        consumer2 = await self._create_consumer(
+            consumer_name_prefix="claiming_consumer",
+            count=10,
+            block_ms=1000,
+            claim_interval_seconds=2,  # Check for pending messages every 2 seconds
+            claim_idle_ms=2000,  # Claim messages idle for > 2 seconds
+            message_handler=self._create_tracking_handler(
+                consumer_name="claiming_consumer",
+                should_fail=False,  # This consumer succeeds
+            ),
+        )
+
+        # Start both consumers at the same time (realistic scenario)
+        await asyncio.gather(
+            consumer1.start(),
+            consumer2.start(),
+        )
+
+        self.assertTrue(consumer1.is_running(), "Consumer 1 should be running")
+        self.assertTrue(consumer2.is_running(), "Consumer 2 should be running")
+
+        self.logger.info("Both consumers started. Consumer 1 will fail messages, Consumer 2 will claim and process them.")
+
+        # Wait for all messages to be successfully processed
+        # Consumer 2 will process some directly and claim others from Consumer 1
+        success = await self._wait_for_processing(
+            expected_count=message_count,
+            timeout_seconds=20,
+        )
+        self.assertTrue(success, f"All {message_count} messages should eventually be processed")
+
+        # Verify all messages were processed exactly once
+        processed_count = len(self.processed_messages)
+        self.assertEqual(processed_count, message_count, "All messages should be processed exactly once")
+
+        # Verify only Consumer 2 successfully processed messages (Consumer 1 always failed)
+        claiming_consumer_count = sum(
+            1 for msg in self.processed_messages.values()
+            if msg['consumer_name'] == 'claiming_consumer'
+        )
+        failing_consumer_count = sum(
+            1 for msg in self.processed_messages.values()
+            if msg['consumer_name'] == 'failing_consumer'
+        )
+
+        self.assertEqual(claiming_consumer_count, message_count,
+                        "All successfully processed messages should be from claiming_consumer")
+        self.assertEqual(failing_consumer_count, 0,
+                        "Failing consumer should have 0 successful messages in storage")
+
+        # Verify Consumer 2 claimed some messages (messages that Consumer 1 failed)
+        metrics2 = await consumer2.get_metrics()
+        self.assertEqual(metrics2["messages_processed"], message_count,
+                        "Consumer 2 should have processed all messages")
+        self.assertGreater(metrics2["messages_claimed"], 0,
+                          "Consumer 2 should have claimed at least some messages from Consumer 1")
+        self.assertEqual(metrics2["messages_failed"], 0, "Consumer 2 should have no failures")
+
+        # Verify Consumer 1 metrics
+        metrics1 = await consumer1.get_metrics()
+        self.assertEqual(metrics1["messages_processed"], 0,
+                        "Consumer 1 should not have successfully processed any messages")
+        self.assertGreater(metrics1["messages_failed"], 0,
+                          "Consumer 1 should have failed at least some messages")
+
+        # Log the distribution
+        self.logger.info(
+            f"Distribution: Consumer 1 failed {metrics1['messages_failed']} messages, "
+            f"Consumer 2 processed {metrics2['messages_processed']} messages "
+            f"({metrics2['messages_claimed']} claimed from Consumer 1)"
+        )
+
+        # Verify no pending messages remain (all ACKed by Consumer 2)
+        pending_count = await self._get_pending_count()
+        self.assertEqual(pending_count, 0, "No pending messages should remain")
+
+        # Verify stream still has all messages
+        stream_length = await get_stream_length(self.redis_client, self.stream_name)
+        self.assertEqual(stream_length, message_count, "All messages remain in stream")
+
+        # Stop both consumers
+        await asyncio.gather(
+            consumer1.stop(),
+            consumer2.stop(),
+        )
+
+        self.assertFalse(consumer1.is_running(), "Consumer 1 should not be running after stop()")
+        self.assertFalse(consumer2.is_running(), "Consumer 2 should not be running after stop()")
 
         self.logger.info("Test completed successfully")
 
