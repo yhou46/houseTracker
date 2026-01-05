@@ -5,10 +5,10 @@ from typing import Any, Awaitable, List
 from redis.asyncio import Redis
 
 from shared.async_service import run_async_service
-from shared.redis_util import RedisStreamTrimmer, RedisStreamConfig
+from shared.redis_stream_util import RedisStreamTrimmer, RedisStreamTrimConfig
 from shared.logger_factory import configure_logger
 
-from shared.test.redis_test import produce_messages, trim_stream
+from shared.test.redis_stream_test_tools import produce_messages, trim_stream
 
 async def main() -> None:
 
@@ -22,7 +22,7 @@ async def main() -> None:
 
     trimmer = RedisStreamTrimmer(
             redis_client_trimmer,
-            RedisStreamConfig(
+            RedisStreamTrimConfig(
                 stream_name='mystream',
                 trim_interval_seconds=2,  # Trim every 2 seconds
                 trim_max_len=2,
@@ -32,7 +32,10 @@ async def main() -> None:
         )
 
     async def start() -> asyncio.Future[Any]:
-        msg_producer = produce_messages(redis_client_producer)
+        msg_producer = produce_messages(
+            redis_client_producer,
+            message_count=10,
+            )
 
         return asyncio.gather(
             msg_producer,
@@ -47,5 +50,20 @@ async def main() -> None:
         shutdown,
         )
 
+async def might_fail(input: Any) -> None:
+    await asyncio.sleep(0.1)
+    print(f"Processing input: {input}")
+    raise ValueError("Something went wrong in the task")
+
+async def main2() -> None:
+    try:
+        await asyncio.wait_for(might_fail(1), timeout=1.0)
+        await asyncio.wait_for(might_fail(2), timeout=1.0)
+
+    except ValueError as e:
+        print(f"Caught expected exception: {e}")
+    except asyncio.TimeoutError:
+        print("Operation timed out")
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main2())
