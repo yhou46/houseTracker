@@ -227,8 +227,8 @@ class RedisStreamConsumerConfig:
     consumer_name_prefix: str
 
     # Reading settings
-    block_ms: int = 5000  # 5 seconds
-    count: int = 10  # Batch size
+    read_block_ms: int = 5000  # 5 seconds
+    read_batch_size: int = 10  # Batch size
 
     # Claiming settings
     claim_interval_seconds: int = 15
@@ -320,7 +320,7 @@ ConsumerMetrics = TypedDict(
 )
 
 # Type alias for message handler
-RedisStreamMessageHandler: TypeAlias = Callable[[RedisStreamMessage], Awaitable[bool]]
+RedisStreamMessageHandler: TypeAlias = Callable[[RedisStreamMessage], Awaitable[None]]
 class RedisStreamConsumer(AsyncService):
     """Async Redis Stream Consumer with consumer group support"""
 
@@ -489,8 +489,8 @@ class RedisStreamConsumer(AsyncService):
                     groupname=self._consumer_config.consumer_group,
                     consumername=self._consumer_name,
                     streams={self._consumer_config.stream_name: '>'},
-                    count=self._consumer_config.count,
-                    block=self._consumer_config.block_ms
+                    count=self._consumer_config.read_batch_size,
+                    block=self._consumer_config.read_block_ms
                 )
 
                 self.logger.info(
@@ -621,30 +621,25 @@ class RedisStreamConsumer(AsyncService):
             )
 
             # Process with timeout
-            success = await asyncio.wait_for(
+            await asyncio.wait_for(
                 self._message_handler(message),
                 timeout=self._consumer_config.processing_timeout_seconds
             )
 
-            if success:
-                # Acknowledge the message (removes from PEL)
-                # TODO: should we do multi ACK for batch processing?
-                await self._redis_client.xack(
-                    self._consumer_config.stream_name,
-                    self._consumer_config.consumer_group,
-                    message_id,
-                )
+            # Acknowledge the message (removes from PEL)
+            # TODO: should we do multi ACK for batch processing?
+            await self._redis_client.xack(
+                self._consumer_config.stream_name,
+                self._consumer_config.consumer_group,
+                message_id,
+            )
 
-                # Update metrics
-                if is_claimed:
-                    self.metrics["messages_claimed"] += 1
-                self.metrics["messages_processed"] += 1
+            # Update metrics
+            if is_claimed:
+                self.metrics["messages_claimed"] += 1
+            self.metrics["messages_processed"] += 1
 
-                self.logger.debug(f"Successfully processed and acknowledged: {message_id}")
-            else:
-                # Handler returned False - don't ACK, let it be reclaimed
-                self.logger.warning(f"Handler returned False for message: {message_id}")
-                self.metrics["messages_failed"] += 1
+            self.logger.debug(f"Successfully processed and acknowledged: {message_id}")
 
         except asyncio.TimeoutError:
             self.logger.error(
