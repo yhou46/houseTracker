@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import shared.logger_factory as logger_factory
-from data_service.aws_s3_util import (
+from shared.aws_s3_util import (
     upload_json_objects
 )
 from tools.property_store_tool import get_list_of_files
