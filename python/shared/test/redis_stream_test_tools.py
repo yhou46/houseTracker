@@ -16,30 +16,45 @@ from shared.async_service import run_async_service
 # RedisFieldType = Union[bytes, bytearray, memoryview, str, int, float]
 # RedisFields = dict[RedisFieldType, RedisFieldType]
 
-async def produce_messages(redis_client: Redis, message_count: int) -> None:
+async def produce_messages(
+    redis_client: Redis,
+    message_count: int,
+    batch_process: bool = False,
+    ) -> None:
     """Async Redis stream producer"""
 
     try:
+        producer_config = redis_stream_util.RedisStreamProducerConfig(
+            stream_name='mystream',
+            max_batch_size=9,
+        )
+        producer = redis_stream_util.RedisStreamProducer(
+            redis_client,
+            producer_config
+        )
 
-
-        # Produce messages
+        # generate messages
+        messages = []
         for i in range(message_count):
-            message: dict[Union[str, bytes], Union[str, int, float, bytes]] = {
+            message: redis_stream_util.RedisFields = {
                 'id': f"{i}",
                 'timestamp': datetime.now().isoformat(),
                 'data': f'Message {i}',
                 'value': f"{100 + i}"
             }
+            messages.append(message)
 
-            # Add message to stream
-            message_id = await redis_client.xadd(
-                'mystream',  # stream name
-                #
-                fields=cast(redis_stream_util.RedisFields, message)      # message data
-            )
+        # Produce messages
+        if batch_process:
+            message_ids = await producer.publish_batch(messages)
+            print(f"Produced batch of {len(message_ids)} messages, IDs: {message_ids}")
+        else:
+            for message in messages:
+                # Add message to stream
+                message_id = await producer.publish(message)
 
-            print(f"Produced: {message_id} - {message}")
-            await asyncio.sleep(0.5)  # Delay between messages
+                print(f"Produced: {message_id} - {message}")
+                await asyncio.sleep(0.5)  # Delay between messages
 
     finally:
         await redis_client.aclose()
@@ -97,10 +112,10 @@ async def consume_stream(
         return # Acknowledge message
 
     consumer = redis_stream_util.RedisStreamConsumer(
+        redis_client,
         consumer_config,
         trim_config,
         redis_stream_util.always_trim,
-        redis_client,
         message_handler,
     )
 
@@ -163,7 +178,13 @@ Examples:
 
     if args.mode == 'producer':
         # Produce test
-        asyncio.run(produce_messages(redis_client, args.count))
+        asyncio.run(
+            produce_messages(
+                redis_client,
+                args.count,
+                batch_process=False,
+            )
+        )
     elif args.mode == 'consumer':
         # Consume test
         asyncio.run(consume_stream(

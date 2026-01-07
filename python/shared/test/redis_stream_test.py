@@ -11,6 +11,8 @@ from shared.redis_stream_util import (
     RedisStreamTrimConfig,
     RedisStreamConsumer,
     RedisStreamConsumerConfig,
+    RedisStreamProducer,
+    RedisStreamProducerConfig,
     RedisStreamMessage,
     RedisStreamMessageHandler,
     always_trim,
@@ -46,6 +48,15 @@ async def get_stream_length(redis_client: Redis, stream_name: str) -> int:
     if not isinstance(length, int):
         raise TypeError(f"Expected int from xlen, got {type(length)}")
     return length
+
+
+def create_test_message(index: int) -> RedisFields:
+    """Create a test message with standard fields"""
+    return {
+        'id': str(index),
+        'data': f'Test message {index}',
+        'index': index,
+    }
 
 
 class TestRedisStreamTrimmer(unittest.IsolatedAsyncioTestCase):
@@ -840,6 +851,480 @@ class TestRedisStreamConsumer(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(consumer2.is_running(), "Consumer 2 should not be running after stop()")
 
         self.logger.info("Test completed successfully")
+
+
+class TestRedisStreamProducer(unittest.IsolatedAsyncioTestCase):
+    """Test suite for RedisStreamProducer"""
+
+    async def asyncSetUp(self) -> None:
+        """Set up test fixtures before each test"""
+        configure_logger()
+        self.logger = get_logger(self.__class__.__name__)
+
+        # Load Redis config using relative path
+        current_dir = Path(__file__).parent
+        config_path = current_dir / "config" / "redis_test.config.json"
+        with open(config_path, 'r') as f:
+            redis_config = json.load(f)
+
+        # Create async Redis client
+        self.redis_client = Redis(
+            host=redis_config['host'],
+            port=redis_config['port'],
+            decode_responses=True
+        )
+
+        # Test stream name (unique per test to avoid conflicts)
+        self.stream_name_prefix = "test_redis_stream_producer"
+        self.stream_name = f"{self.stream_name_prefix}_{id(self)}"
+
+    async def asyncTearDown(self) -> None:
+        """Clean up after each test"""
+        # Delete test stream
+        try:
+            await self.redis_client.delete(self.stream_name)
+        except Exception as e:
+            self.logger.error(f"Failed to delete test stream {self.stream_name}: {e}")
+
+        # Log remaining streams to verify cleanup
+        remaining_streams = await self._log_all_test_streams()
+        self.assertEqual(
+            remaining_streams,
+            [],
+            "There should be no remaining test streams after cleanup"
+        )
+
+        # Close Redis connection
+        await self.redis_client.aclose()
+
+    # Reusable helper methods
+
+    async def _create_producer(
+        self,
+        max_batch_size: int = 10,
+    ) -> RedisStreamProducer:
+        """Create a RedisStreamProducer instance with test configuration"""
+        config = RedisStreamProducerConfig(
+            stream_name=self.stream_name,
+            max_batch_size=max_batch_size
+        )
+
+        return RedisStreamProducer(
+            self.redis_client,
+            config
+        )
+
+    async def _get_stream_length(self) -> int:
+        """Get current stream length"""
+        return await get_stream_length(self.redis_client, self.stream_name)
+
+    async def _log_all_test_streams(self) -> List[Any]:
+        """Log all test streams currently in Redis"""
+        try:
+            all_keys = await self.redis_client.keys(f"{self.stream_name_prefix}_*")
+            if all_keys:
+                self.logger.info(f"Current test streams in Redis: {all_keys}")
+            else:
+                self.logger.info("No test streams in Redis")
+
+            if not isinstance(all_keys, list):
+                raise TypeError(f"Expected list from keys, got {type(all_keys)}")
+
+            return all_keys
+        except Exception as error:
+            self.logger.error(f"Failed to list streams: {error}")
+            raise error
+
+    async def _read_all_messages_from_stream(self) -> List[tuple[str, Dict[str, Any]]]:
+        """Read all messages from the stream using XRANGE"""
+        messages = await self.redis_client.xrange(self.stream_name, '-', '+')
+        if not isinstance(messages, list):
+            raise TypeError(f"Expected list from xrange, got {type(messages)}")
+        return messages
+
+    # Test scenarios
+
+    async def test_single_message_publish(self) -> None:
+        """Test that producer can publish a single message and return valid message ID"""
+        # Create producer
+        producer = await self._create_producer()
+
+        # Create test message
+        message = create_test_message(1)
+
+        # Publish single message
+        message_id = await producer.publish(message)
+
+        # Verify message ID is returned and is a string
+        self.assertIsInstance(message_id, str, "Message ID should be a string")
+        self.assertGreater(len(message_id), 0, "Message ID should not be empty")
+        self.assertIn('-', message_id, "Message ID should be in format 'timestamp-sequence'")
+
+        # Verify stream length is 1
+        stream_length = await self._get_stream_length()
+        self.assertEqual(stream_length, 1, "Stream should contain exactly 1 message")
+
+        # Verify message content in stream
+        messages = await self._read_all_messages_from_stream()
+        self.assertEqual(len(messages), 1, "Should have exactly 1 message in stream")
+
+        msg_id, msg_data = messages[0]
+        self.assertEqual(msg_id, message_id, "Message ID should match what was returned")
+        self.assertEqual(msg_data['id'], message['id'], "Message id field should match")
+        self.assertEqual(msg_data['data'], message['data'], "Message data field should match")
+
+        self.logger.info(f"Successfully published message with ID: {message_id}")
+
+    async def test_batch_publish_under_limit(self) -> None:
+        """Test batch publishing with message count less than max_batch_size"""
+        # Create producer with max_batch_size=10
+        max_batch_size = 10
+        producer = await self._create_producer(max_batch_size=max_batch_size)
+
+        # Create batch of messages (less than max_batch_size)
+        message_count = 5
+        messages = [ create_test_message(i) for i in range(message_count)]
+
+        # Publish batch
+        message_ids = await producer.publish_batch(messages)
+
+        # Verify correct number of message IDs returned
+        self.assertEqual(len(message_ids), message_count,
+                        f"Should return {message_count} message IDs")
+
+        # Verify all message IDs are valid strings
+        for msg_id in message_ids:
+            self.assertIsInstance(msg_id, str, "Each message ID should be a string")
+            self.assertIn('-', msg_id, "Each message ID should be in format 'timestamp-sequence'")
+
+        # Verify stream length
+        stream_length = await self._get_stream_length()
+        self.assertEqual(stream_length, message_count,
+                        f"Stream should contain exactly {message_count} messages")
+
+        # Verify all messages are in stream with correct content
+        stream_messages = await self._read_all_messages_from_stream()
+        self.assertEqual(len(stream_messages), message_count,
+                        "Stream should have all published messages")
+
+        # Verify message IDs match and content is correct
+        for i, (msg_id, msg_data) in enumerate(stream_messages):
+            self.assertEqual(msg_id, message_ids[i],
+                           f"Message ID at index {i} should match")
+            self.assertEqual(msg_data['id'], messages[i]['id'],
+                           f"Message data at index {i} should match")
+            self.assertEqual(msg_data['data'], messages[i]['data'],
+                           f"Message data at index {i} should match")
+
+        self.logger.info(f"Successfully published batch of {message_count} messages")
+
+    async def test_batch_publish_at_limit(self) -> None:
+        """Test batch publishing with message count exactly equal to max_batch_size"""
+        # Create producer with max_batch_size=10
+        max_batch_size = 10
+        producer = await self._create_producer(max_batch_size=max_batch_size)
+
+        # Create batch of messages (exactly max_batch_size)
+        message_count = max_batch_size
+        messages = [ create_test_message(i) for i in range(message_count)]
+
+        # Publish batch
+        message_ids = await producer.publish_batch(messages)
+
+        # Verify correct number of message IDs returned
+        self.assertEqual(len(message_ids), message_count,
+                        f"Should return {message_count} message IDs")
+
+        # Verify stream length
+        stream_length = await self._get_stream_length()
+        self.assertEqual(stream_length, message_count,
+                        f"Stream should contain exactly {message_count} messages")
+
+        # Verify all messages are in stream
+        stream_messages = await self._read_all_messages_from_stream()
+        self.assertEqual(len(stream_messages), message_count,
+                        "Stream should have all published messages")
+
+        self.logger.info(f"Successfully published batch at limit: {message_count} messages")
+
+    async def test_batch_publish_over_limit_with_chunking(self) -> None:
+        """Test batch publishing with message count greater than max_batch_size (auto-chunking)"""
+        # Create producer with small max_batch_size to test chunking
+        max_batch_size = 10
+        producer = await self._create_producer(max_batch_size=max_batch_size)
+
+        # Create batch larger than max_batch_size (non-multiple to test partial chunks)
+        message_count = 25  # Will be split into 3 chunks: 10 + 10 + 5
+        messages = [create_test_message(i) for i in range(message_count)]
+
+        # Publish batch (should auto-chunk)
+        message_ids = await producer.publish_batch(messages)
+
+        # Verify correct number of message IDs returned
+        self.assertEqual(len(message_ids), message_count,
+                        f"Should return {message_count} message IDs despite chunking")
+
+        # Verify stream length
+        stream_length = await self._get_stream_length()
+        self.assertEqual(stream_length, message_count,
+                        f"Stream should contain exactly {message_count} messages")
+
+        # Verify all messages are in stream with correct order
+        stream_messages = await self._read_all_messages_from_stream()
+        self.assertEqual(len(stream_messages), message_count,
+                        "Stream should have all published messages")
+
+        # Verify order is preserved (important for chunked batches)
+        for i, (msg_id, msg_data) in enumerate(stream_messages):
+            self.assertEqual(msg_id, message_ids[i],
+                           f"Message ID at index {i} should match (order preserved)")
+            self.assertEqual(msg_data['id'], messages[i]['id'],
+                           f"Message data at index {i} should match (order preserved)")
+
+        self.logger.info(
+            f"Successfully published batch over limit with chunking: "
+            f"{message_count} messages (max_batch_size={max_batch_size})"
+        )
+
+    async def test_exact_multiple_of_max_batch_size(self) -> None:
+        """Test batch publishing with message count as exact multiple of max_batch_size"""
+        # Create producer with max_batch_size=10
+        max_batch_size = 10
+        producer = await self._create_producer(max_batch_size=max_batch_size)
+
+        # Create batch that is exact multiple of max_batch_size
+        message_count = 20  # Will be split into 2 chunks: 10 + 10
+        messages = [create_test_message(i) for i in range(message_count)]
+
+        # Publish batch (should auto-chunk into exact chunks)
+        message_ids = await producer.publish_batch(messages)
+
+        # Verify correct number of message IDs returned
+        self.assertEqual(len(message_ids), message_count,
+                        f"Should return {message_count} message IDs")
+
+        # Verify stream length
+        stream_length = await self._get_stream_length()
+        self.assertEqual(stream_length, message_count,
+                        f"Stream should contain exactly {message_count} messages")
+
+        # Verify all messages are in stream
+        stream_messages = await self._read_all_messages_from_stream()
+        self.assertEqual(len(stream_messages), message_count,
+                        "Stream should have all published messages")
+
+        # Verify order is preserved
+        for i, (msg_id, msg_data) in enumerate(stream_messages):
+            self.assertEqual(msg_id, message_ids[i],
+                           f"Message ID at index {i} should match")
+            self.assertEqual(msg_data['id'], messages[i]['id'],
+                           f"Message data at index {i} should match")
+
+        self.logger.info(
+            f"Successfully published exact multiple batch: "
+            f"{message_count} messages (max_batch_size={max_batch_size}, "
+            f"{message_count // max_batch_size} chunks)"
+        )
+
+
+class TestRedisStreamIntegration(unittest.IsolatedAsyncioTestCase):
+    """Integration tests for RedisStreamProducer with RedisStreamConsumer"""
+
+    async def asyncSetUp(self) -> None:
+        """Set up test fixtures before each test"""
+        configure_logger()
+        self.logger = get_logger(self.__class__.__name__)
+
+        # Load Redis config using relative path
+        current_dir = Path(__file__).parent
+        config_path = current_dir / "config" / "redis_test.config.json"
+        with open(config_path, 'r') as f:
+            redis_config = json.load(f)
+
+        # Create async Redis client
+        self.redis_client = Redis(
+            host=redis_config['host'],
+            port=redis_config['port'],
+            decode_responses=True
+        )
+
+        # Test stream name (unique per test to avoid conflicts)
+        self.stream_name_prefix = "test_redis_stream_integration"
+        self.stream_name = f"{self.stream_name_prefix}_{id(self)}"
+        self.consumer_group = "test_group"
+
+        # Storage for consumed messages
+        self.consumed_messages: List[RedisStreamMessage] = []
+
+    async def asyncTearDown(self) -> None:
+        """Clean up after each test"""
+        # Delete consumer group first
+        try:
+            await self.redis_client.xgroup_destroy(self.stream_name, self.consumer_group)
+            self.logger.info(f"Deleted consumer group: {self.consumer_group}")
+        except Exception as e:
+            self.logger.info(f"Consumer group cleanup (may not exist): {e}")
+
+        # Delete test stream
+        try:
+            await self.redis_client.delete(self.stream_name)
+        except Exception as e:
+            self.logger.error(f"Failed to delete test stream {self.stream_name}: {e}")
+
+        # Log remaining streams to verify cleanup
+        remaining_streams = await self._log_all_test_streams()
+        self.assertEqual(
+            remaining_streams,
+            [],
+            "There should be no remaining test streams after cleanup"
+        )
+
+        # Close Redis connection
+        await self.redis_client.aclose()
+
+    # Reusable helper methods
+
+    async def _create_producer(
+        self,
+        max_batch_size: int = 10,
+    ) -> RedisStreamProducer:
+        """Create a RedisStreamProducer instance with test configuration"""
+        config = RedisStreamProducerConfig(
+            stream_name=self.stream_name,
+            max_batch_size=max_batch_size
+        )
+
+        return RedisStreamProducer(
+            self.redis_client,
+            config
+        )
+
+    async def _create_consumer(self) -> RedisStreamConsumer:
+        """Create a RedisStreamConsumer instance with test configuration"""
+        consumer_config = RedisStreamConsumerConfig(
+            stream_name=self.stream_name,
+            consumer_group=self.consumer_group,
+            consumer_name_prefix="test_consumer",
+            read_block_ms=1000,
+            read_batch_size=10,
+            claim_interval_seconds=3600,  # Disable auto-claiming for this test
+            claim_idle_ms=3600000,
+            processing_timeout_seconds=45,
+            shutdown_grace_period_seconds=10,
+        )
+
+        trimmer_config = RedisStreamTrimConfig(
+            stream_name=self.stream_name,
+            trim_interval_seconds=60,
+            trim_max_len=1000,
+            trim_approximate=True,
+        )
+
+        async def message_handler(message: RedisStreamMessage) -> None:
+            """Handler that stores consumed messages in order"""
+            self.consumed_messages.append(message)
+            self.logger.info(f"Consumed message: {message.redis_stream_message_id}")
+
+        return RedisStreamConsumer(
+            redis_client=self.redis_client,
+            consumer_config=consumer_config,
+            trimmer_config=trimmer_config,
+            trim_trigger=always_trim,
+            message_handler=message_handler,
+            debug=True,
+        )
+
+    async def _wait_for_consumption(
+        self,
+        expected_count: int,
+        timeout_seconds: int = 15,
+        poll_interval: float = 0.5,
+    ) -> bool:
+        """Poll until expected number of messages are consumed"""
+        start_time = asyncio.get_event_loop().time()
+
+        while asyncio.get_event_loop().time() - start_time < timeout_seconds:
+            current_count = len(self.consumed_messages)
+
+            self.logger.info(f"Waiting for consumption: {current_count}/{expected_count}")
+
+            if current_count >= expected_count:
+                return True
+
+            await asyncio.sleep(poll_interval)
+
+        return False
+
+    async def _log_all_test_streams(self) -> List[Any]:
+        """Log all test streams currently in Redis"""
+        try:
+            all_keys = await self.redis_client.keys(f"{self.stream_name_prefix}_*")
+            if all_keys:
+                self.logger.info(f"Current test streams in Redis: {all_keys}")
+            else:
+                self.logger.info("No test streams in Redis")
+
+            if not isinstance(all_keys, list):
+                raise TypeError(f"Expected list from keys, got {type(all_keys)}")
+
+            return all_keys
+        except Exception as error:
+            self.logger.error(f"Failed to list streams: {error}")
+            raise error
+
+    # Test scenarios
+
+    async def test_batch_publish_order_with_consumer(self) -> None:
+        """Test that batch publish with chunking preserves order when consumed"""
+        # Create producer with small batch size to force chunking
+        max_batch_size = 10
+        producer = await self._create_producer(max_batch_size=max_batch_size)
+
+        # Create messages that will be chunked (25 messages = 3 chunks: 10+10+5)
+        message_count = 25
+        messages = [create_test_message(i) for i in range(message_count)]
+
+        # Publish batch (will be auto-chunked)
+        message_ids = await producer.publish_batch(messages)
+
+        self.logger.info(f"Published {message_count} messages in chunks")
+
+        # Create and start consumer
+        consumer = await self._create_consumer()
+        await consumer.start()
+        self.assertTrue(consumer.is_running(), "Consumer should be running")
+
+        # Wait for all messages to be consumed
+        success = await self._wait_for_consumption(
+            expected_count=message_count,
+            timeout_seconds=20,
+        )
+        self.assertTrue(success, f"All {message_count} messages should be consumed")
+
+        # Stop consumer
+        await consumer.stop()
+        self.assertFalse(consumer.is_running(), "Consumer should not be running after stop")
+
+        # Verify all messages were consumed
+        self.assertEqual(len(self.consumed_messages), message_count,
+                        "All messages should be consumed")
+
+        # Verify order is preserved
+        for i, consumed_msg in enumerate(self.consumed_messages):
+            # Check message ID matches
+            self.assertEqual(consumed_msg.redis_stream_message_id, message_ids[i],
+                           f"Message ID at index {i} should match")
+
+            # Check data content matches
+            self.assertEqual(consumed_msg.data['id'], messages[i]['id'],
+                           f"Message data 'id' at index {i} should match")
+            self.assertEqual(consumed_msg.data['data'], messages[i]['data'],
+                           f"Message data 'data' at index {i} should match")
+
+        self.logger.info(
+            f"Successfully verified order preservation: "
+            f"{message_count} messages published with chunking and consumed in correct order"
+        )
 
 
 if __name__ == "__main__":

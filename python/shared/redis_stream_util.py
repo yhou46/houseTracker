@@ -62,6 +62,11 @@ class RedisStreamTrimConfig:
     trim_max_len: int
     trim_approximate: bool = True
 
+@dataclass
+class RedisStreamProducerConfig:
+    stream_name: str
+    max_batch_size: int = 1000  # Maximum messages per pipeline batch
+
 class RedisClient:
     """
     Synchronous Redis client
@@ -326,10 +331,10 @@ class RedisStreamConsumer(AsyncService):
 
     def __init__(
         self,
+        redis_client: redisAsync.Redis,
         consumer_config: RedisStreamConsumerConfig,
         trimmer_config: RedisStreamTrimConfig,
         trim_trigger: RedisStreamTrimTriggerFunction,
-        redis_client: redisAsync.Redis,
         message_handler: RedisStreamMessageHandler,
         debug: bool = False,
     ):
@@ -381,9 +386,6 @@ class RedisStreamConsumer(AsyncService):
 
         # Ensure consumer group exists
         await self._ensure_consumer_group()
-
-        # Setup signal handlers for graceful shutdown
-        # self._setup_signal_handlers()
 
         # Start tasks
         self._running = True
@@ -689,3 +691,142 @@ class RedisStreamConsumer(AsyncService):
                 self.logger.error(f"Error getting metrics: {e}")
 
         return metrics
+
+class RedisStreamProducer:
+    """Async Redis Stream Producer for publishing messages to Redis streams"""
+
+    def __init__(
+        self,
+        redis_client: redisAsync.Redis,
+        config: RedisStreamProducerConfig,
+    ):
+        self._redis_client = redis_client
+        self._config = config
+        self.logger = logger_factory.get_logger(__name__)
+
+    async def publish(
+        self,
+        data: RedisFields,
+        message_id: str = '*'
+    ) -> str:
+        """
+        Publish a single message to the Redis stream.
+
+        Args:
+            data: Dictionary of field-value pairs for the message
+            message_id: Optional message ID (default '*' for auto-generation)
+
+        Returns:
+            The message ID assigned by Redis
+
+        Raises:
+            Exception: If the publish operation fails
+        """
+        try:
+            self._validate_fields(data)
+
+            # Publish message using XADD
+            result_message_id = await self._redis_client.xadd(
+                name=self._config.stream_name,
+                fields=data,
+                id=message_id
+            )
+
+            self.logger.debug(
+                f"Published message to stream '{self._config.stream_name}': "
+                f"id={result_message_id}"
+            )
+
+            if not isinstance(result_message_id, str):
+                raise RuntimeError(
+                    f"Unexpected message ID type from XADD: {type(result_message_id)}"
+                )
+
+            return result_message_id
+
+        except Exception as error:
+            self.logger.error(
+                f"Failed to publish message to stream '{self._config.stream_name}': {error}",
+                exc_info=True
+            )
+            raise
+
+    async def publish_batch(
+        self,
+        messages: List[RedisFields]
+    ) -> List[str]:
+        """
+        Publish multiple messages to the Redis stream using a pipeline.
+
+        Args:
+            messages: List of message data dictionaries
+
+        Returns:
+            List of message IDs in the same order as input messages
+
+        Raises:
+            Exception: If the batch publish operation fails
+        """
+        try:
+            if not messages:
+                self.logger.warning("publish_batch called with empty message list")
+                return []
+
+            # Validate all messages first
+            for data in messages:
+                self._validate_fields(data)
+
+            # Use pipeline for efficient batch publishing
+            async with self._redis_client.pipeline(transaction=False) as pipe:
+                for data in messages:
+                    pipe.xadd(
+                        name=self._config.stream_name,
+                        fields=data,
+                        id='*'
+                    )
+
+                # Execute all XADD commands in one network round-trip
+                results = await pipe.execute()
+
+            self.logger.info(
+                f"Published {len(messages)} messages to stream '{self._config.stream_name}'"
+            )
+
+            return results
+
+        except Exception as error:
+            self.logger.error(
+                f"Failed to publish batch to stream '{self._config.stream_name}': {error}",
+                exc_info=True
+            )
+            raise
+
+    def _validate_fields(self, data: RedisFields) -> None:
+        """
+        Validate that field names and values are valid Redis types.
+
+        Args:
+            data: Dictionary to validate
+
+        Raises:
+            ValueError: If validation fails
+        """
+        if not data:
+            raise ValueError("Message data cannot be empty")
+
+        if not isinstance(data, dict):
+            raise ValueError(f"Message data must be a dictionary, got {type(data)}")
+
+        # Redis stream fields must be valid RedisFieldType
+        # The type hint already restricts this, but we do a runtime check for safety
+        for key, value in data.items():
+            if not isinstance(key, (bytes, bytearray, memoryview, str, int, float)):
+                raise ValueError(
+                    f"Invalid field name type: {type(key)}. "
+                    f"Must be bytes, bytearray, memoryview, str, int, or float"
+                )
+            if not isinstance(value, (bytes, bytearray, memoryview, str, int, float)):
+                raise ValueError(
+                    f"Invalid field value type for key '{key}': {type(value)}. "
+                    f"Must be bytes, bytearray, memoryview, str, int, or float"
+                )
