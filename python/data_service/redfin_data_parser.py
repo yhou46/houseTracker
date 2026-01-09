@@ -324,7 +324,7 @@ def parse_property_status(status_str: str, history: IPropertyHistory) -> Propert
             Example: https://www.redfin.com/WA/Bellevue/14651-NE-40th-St-98007/unit-C4/home/25631
             This one's redfin status is OFF MARKET— SOLD JUL 2021 FOR $525,000, but was listed before in DB record, in this case, the status should be list removed, which mean the property is not sold and withdraw by the owner
             """
-            event_type_set: Set[PropertyHistoryEventType] = {
+            list_removed_event_type_set: Set[PropertyHistoryEventType] = {
                 PropertyHistoryEventType.Listed,
                 PropertyHistoryEventType.ReListed,
                 PropertyHistoryEventType.DeListed,
@@ -333,8 +333,14 @@ def parse_property_status(status_str: str, history: IPropertyHistory) -> Propert
                 PropertyHistoryEventType.ListRemoved,
                 PropertyHistoryEventType.Pending,
             }
-            if len(history_events) > 0 and (history_events[-1].event_type in event_type_set):
+            if len(history_events) > 0 and (history_events[-1].event_type in list_removed_event_type_set):
                 return PropertyStatus.ListRemoved
+
+            sold_event_type_set: Set[PropertyHistoryEventType] = {
+                PropertyHistoryEventType.Sold,
+            }
+            if len(history_events) > 0 and (history_events[-1].event_type in sold_event_type_set):
+                return PropertyStatus.Sold
 
         # Handle cases like "soldon aug 5, 2025"
         if status_str.startswith("sold"):

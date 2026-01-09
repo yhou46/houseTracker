@@ -4,13 +4,15 @@ cd python
 ```
 
 # TODO:
-- Use scrapy to crawl data
-scrapy -> parsed jsonl file -> service parse the jsonl file(convert to iproperty object, add id, check duplicates) and store in DB
-- Move iproperty to separate package?
-- Create a hash function to hash address
+- Refactor spider to put raw data into Redis stream
+- Have multiple workers to consume raw data, parse and store to DB
+- Containerize all services and spiders
+- Move it to cloud, run it daily
+- Fix playwright spider
+- Check crawled property count and compare to crawled page, fix errors
+- Add USPS address verification if address parsing failed. Try to include those with wrong addresses: like vacant land and ready to built properties
 - Add/Create #MLS and parcelNumber (tax) to property
 - How to track if property basic propery changed? Like area change and room change? Add last update time?
-- Store data into DB (mongodb for now)
 
 
 - 3 tables:

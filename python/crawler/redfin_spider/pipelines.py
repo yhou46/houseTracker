@@ -11,8 +11,15 @@ from typing import Dict, List, Any
 from itemadapter import ItemAdapter
 from scrapy.exceptions import DropItem
 
+# Scrapy asyncio integration utilities
+from scrapy.utils.defer import deferred_from_coro
+
+# Redis imports
+import redis.asyncio as redis_async
+
 # houseTracker imports
 from shared.aws_s3_util import upload_json_objects
+from shared.redis_stream_util import RedisStreamProducer, RedisStreamProducerConfig, RedisFields
 
 
 
@@ -291,3 +298,257 @@ class AwsS3Pipeline:
             spider.logger.error(f"S3 Pipeline: Error processing item: {e}")
             # Don't crash the spider, just log the error and continue
             return item
+
+
+class RedisStreamPipeline:
+    """
+    Pipeline to publish property URLs to Redis Stream.
+
+    This pipeline is used by PropertyUrlDiscoverySpider to publish discovered
+    property URLs to Redis Stream for consumption by PropertyCrawlerSpider.
+
+    Items are batched and published using RedisStreamProducer from redis_stream_util.
+
+    Note: This uses Twisted's Deferred to integrate async Redis operations with Scrapy.
+    Scrapy uses Twisted for async operations, while RedisStreamProducer uses asyncio.
+    We bridge them using twisted.internet.defer.ensureDeferred().
+    """
+
+    def __init__(self) -> None:
+        self.redis_host: str = "localhost"
+        self.redis_port: int = 6379
+        self.redis_password: str | None = None
+        self.stream_name: str = "property_url_stream"
+        self.batch_size: int = 100
+
+        # Batching state
+        self.batch: list[dict[str, str]] = []
+        self.total_published: int = 0
+        self.total_failed: int = 0
+
+        # Redis client and producer (initialized in open_spider)
+        self.redis_client: redis_async.Redis | None = None
+        self.redis_producer: RedisStreamProducer | None = None
+
+    @classmethod
+    def from_crawler(cls, crawler): # type: ignore[no-untyped-def]
+        """
+        Create pipeline instance from crawler settings.
+        """
+        pipeline = cls()
+
+        # Get Redis connection settings
+        pipeline.redis_host = crawler.settings.get('REDIS_HOST', 'localhost')
+        pipeline.redis_port = crawler.settings.getint('REDIS_PORT', 6379)
+        pipeline.redis_password = crawler.settings.get('REDIS_PASSWORD')
+
+        # Get stream name
+        pipeline.stream_name = crawler.settings.get('PROPERTY_URL_STREAM_NAME', 'property_url_stream')
+
+        # Get batch size
+        pipeline.batch_size = crawler.settings.getint('REDIS_BATCH_SIZE', 100)
+
+        return pipeline
+
+    def open_spider(self, spider): # type: ignore[no-untyped-def]
+        """
+        Called when spider opens. Initialize Redis connection and producer.
+        """
+        spider.logger.info(
+            f"Redis Publisher Pipeline: Initializing with "
+            f"host={self.redis_host}, port={self.redis_port}, "
+            f"stream={self.stream_name}, batch_size={self.batch_size}"
+        )
+
+        # Create async Redis client
+        self.redis_client = redis_async.Redis(
+            host=self.redis_host,
+            port=self.redis_port,
+            password=self.redis_password,
+            decode_responses=True,
+            socket_connect_timeout=5,
+        )
+
+        # Create producer config
+        producer_config = RedisStreamProducerConfig(
+            stream_name=self.stream_name,
+            max_batch_size=self.batch_size
+        )
+
+        # Create Redis stream producer
+        self.redis_producer = RedisStreamProducer(
+            redis_client=self.redis_client,
+            config=producer_config
+        )
+
+        spider.logger.info("Redis Publisher Pipeline: Initialized successfully")
+
+    def close_spider(self, spider): # type: ignore[no-untyped-def]
+        """
+        Called when spider closes. Flush any remaining items in batch.
+        """
+        # Publish any remaining items in batch
+        if self.batch:
+            spider.logger.info(
+                f"Redis Publisher Pipeline: Flushing {len(self.batch)} remaining items"
+            )
+            batch_to_publish = self.batch.copy()
+            self.batch = []
+
+            # Use deferred_from_coro to bridge asyncio coroutine to Twisted Deferred
+            # This works with AsyncioSelectorReactor
+            deferred = deferred_from_coro(self._publish_batch_async(batch_to_publish, spider))
+
+            # Add callback to handle completion
+            def handle_close_result(result): # type: ignore[no-untyped-def]
+                spider.logger.info(f"Redis Publisher Pipeline: Flush completed")
+                return result
+
+            def handle_close_error(failure): # type: ignore[no-untyped-def]
+                spider.logger.error(f"Redis Publisher Pipeline: Flush failed: {failure.getErrorMessage()}")
+                return failure
+
+            deferred.addCallback(handle_close_result)
+            deferred.addErrback(handle_close_error)
+
+        # Close Redis connection
+        if self.redis_client:
+            spider.logger.info("Redis Publisher Pipeline: Closing Redis connection")
+            close_deferred = deferred_from_coro(self.redis_client.aclose())
+
+            def handle_close_conn_result(result): # type: ignore[no-untyped-def]
+                spider.logger.info("Redis Publisher Pipeline: Redis connection closed")
+                return result
+
+            close_deferred.addCallback(handle_close_conn_result)
+
+        spider.logger.info(
+            f"Redis Publisher Pipeline: Closed. "
+            f"Total published: {self.total_published}, "
+            f"Total failed: {self.total_failed}"
+        )
+
+    def process_item(self, item, spider): # type: ignore[no-untyped-def]
+        """
+        Process each PropertyUrlItem and add to batch.
+
+        When batch reaches batch_size, publish to Redis Stream.
+
+        Returns:
+            Deferred that fires when item is processed (batched or published)
+        """
+        try:
+            # Convert PropertyUrlItem to dict
+            item_dict = ItemAdapter(item).asdict()
+
+            # Validate required fields
+            required_fields = ['property_url', 'scraped_at_utc', 'data_source', 'from_page_url']
+            for field in required_fields:
+                if field not in item_dict or not item_dict[field]:
+                    spider.logger.error(f"Redis Publisher: Missing required field '{field}' in item")
+                    self.total_failed += 1
+                    return item
+
+            # Add to batch
+            self.batch.append(item_dict)
+
+            # Publish batch if batch size reached
+            if len(self.batch) >= self.batch_size:
+                batch_to_publish = self.batch.copy()
+                self.batch = []
+
+                # Return deferred for async publishing
+                # deferred_from_coro bridges asyncio coroutine to Twisted Deferred
+                # This works with AsyncioSelectorReactor
+                deferred = deferred_from_coro(self._publish_batch_async(batch_to_publish, spider))
+
+                # Attach callbacks to return item after publish completes
+                def return_item_on_success(result): # type: ignore[no-untyped-def]
+                    return item
+
+                def return_item_on_error(failure): # type: ignore[no-untyped-def]
+                    self._handle_publish_error(failure, spider, item) # type: ignore[no-untyped-call]
+                    return item
+
+                deferred.addCallback(return_item_on_success)
+                deferred.addErrback(return_item_on_error)
+
+                return deferred
+
+            # Item batched, return immediately
+            return item
+
+        except Exception as e:
+            spider.logger.error(f"Redis Publisher Pipeline: Error processing item: {e}", exc_info=True)
+            self.total_failed += 1
+            return item
+
+    async def _publish_batch_async(self, batch: list[dict[str, str]], spider) -> None: # type: ignore[no-untyped-def]
+        """
+        Async method to publish a batch of items to Redis Stream.
+
+        This is an asyncio coroutine that uses RedisStreamProducer.publish_batch().
+        It's bridged to Twisted's Deferred system via ensureDeferred() in process_item().
+
+        Args:
+            batch: List of item dictionaries to publish
+            spider: Spider instance for logging
+        """
+        try:
+            spider.logger.info(
+                f"Redis Publisher: Publishing batch of {len(batch)} items to stream '{self.stream_name}'"
+            )
+
+            # Convert items to Redis fields format
+            # RedisFields type expects field-value pairs where both are RedisFieldType
+            redis_messages: List[RedisFields] = []
+            for item in batch:
+                redis_fields: RedisFields = {
+                    'property_url': item['property_url'],
+                    'scraped_at_utc': item['scraped_at_utc'],
+                    'data_source': item['data_source'],
+                    'from_page_url': item['from_page_url'],
+                }
+                redis_messages.append(redis_fields)
+
+            # Use RedisStreamProducer to publish batch
+            # This is an async operation that returns message IDs
+            if self.redis_producer is None:
+                raise ValueError("Redis producer not initialized in RedisStreamPipeline")
+            message_ids = await self.redis_producer.publish_batch(redis_messages)
+
+            self.total_published += len(batch)
+
+            spider.logger.info(
+                f"Redis Publisher: Successfully published {len(batch)} items. "
+                f"Total published: {self.total_published}"
+            )
+
+        except Exception as e:
+            spider.logger.error(
+                f"Redis Publisher Pipeline: Failed to publish batch: {e}",
+                exc_info=True
+            )
+            self.total_failed += len(batch)
+
+            # TODO: Implement dead letter queue for failed publishes
+            # For now, just log and continue
+            raise  # Re-raise to propagate to Twisted errback
+
+    def _handle_publish_error(self, failure, spider, item): # type: ignore[no-untyped-def]
+        """
+        Handle errors from async publish operation.
+
+        Args:
+            failure: Twisted Failure object
+            spider: Spider instance for logging
+            item: Original item being processed
+
+        Returns:
+            The original item (to continue pipeline)
+        """
+        spider.logger.error(
+            f"Redis Publisher Pipeline: Publish failed: {failure.getErrorMessage()}",
+            exc_info=True
+        )
+        return item

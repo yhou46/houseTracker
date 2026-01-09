@@ -1,0 +1,30 @@
+{
+    "start_urls": {
+        "zip_codes": [
+            "98109"
+        ],
+        "cities": [
+            {
+                "city": "Redmond",
+                "state": "WA",
+                "url": "/city/14913/WA/Redmond"
+            }
+        ]
+    },
+    "aws": {
+        "region": "us-west-2",
+        "s3_bucket_name": "myhousetracker-99ce79"
+    },
+    "redis": {
+        "host": "localhost",
+        "port": 6379,
+        "password": null
+    },
+    "property_url_flow": {
+        "redis_stream_name": "property_url_stream",
+        "redis_consumer_group": "property_url_consumer_group"
+    },
+    "spider_settings": {
+
+    }
+}
