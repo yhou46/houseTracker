@@ -77,7 +77,7 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
 
         # Pipelines - only Redis publisher, no file output
         "ITEM_PIPELINES": {
-            "redfin_spider.pipelines.RedisStreamPipeline": 100,
+            "redfin_spider.pipelines.PropertyUrlPublisherPipeline": 100,
         },
 
         # No browser rendering needed for search results
@@ -130,7 +130,7 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
             # Set Redis stream config
             property_url_flow = config.get("property_url_flow", {})
             spider.settings.set(
-                "PROPERTY_URL_STREAM_NAME",
+                "REDIS_STREAM_NAME",
                 property_url_flow.get("redis_stream_name", "property_url_stream"),
                 priority="spider"
             )

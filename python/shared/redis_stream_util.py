@@ -9,7 +9,9 @@ from typing import (
     Tuple,
     Union,
 )
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 
 import datetime
 import uuid
@@ -286,11 +288,84 @@ def validate_xreadgroup_response(response: Any) -> bool:
 
     return True
 
+class RedisStreamMessageDataType(str, Enum):
+    """Enum for different message types"""
+    UNKNOWN = "UNKNOWN" # Should never be used
+    TEST = "TEST"
+    PROPERTY_URL = "PROPERTY_URL"
+    PROPERTY_RAW_DATA = "PROPERTY_RAW_DATA"
+    # Add more types as needed
+
+class RedisStreamMessageError(Exception):
+    """Base exception for Redis stream message errors"""
+    pass
+
+class MessageParsingError(RedisStreamMessageError):
+    """Raised when message data cannot be parsed from Redis fields"""
+    def __init__(
+            self,
+            message: str,
+            fields: RedisFields,
+            message_type: RedisStreamMessageDataType | None = None,
+            ):
+        self.fields = fields
+        self.message_type = message_type
+        super().__init__(message)
+
+def get_message_data_type(fields: RedisFields) -> RedisStreamMessageDataType:
+    """Extract message data type from Redis fields"""
+    type_field = fields.get("type")
+    if type_field is None:
+        return RedisStreamMessageDataType.UNKNOWN
+
+    if isinstance(type_field, bytes):
+        type_str = type_field.decode('utf-8')
+    else:
+        type_str = str(type_field)
+
+    try:
+        return RedisStreamMessageDataType(type_str)
+    except ValueError:
+        return RedisStreamMessageDataType.UNKNOWN
+
+class RedisStreamMessageData(ABC):
+    """Base class for all Redis stream message data"""
+
+    def __init__(
+            self,
+            message_type: RedisStreamMessageDataType,
+        ):
+        self.type: RedisStreamMessageDataType = message_type
+
+    @abstractmethod
+    def to_redis_fields(self) -> RedisFields:
+        """
+        Convert message data to Redis fields dictionary.
+        Child classes MUST override this to include their specific fields.
+        """
+        return {
+            "type": self.type.value
+        }
+
+    @classmethod
+    @abstractmethod
+    def from_redis_fields(cls, fields: RedisFields) -> 'RedisStreamMessageData':
+        """
+        Convert Redis fields dictionary to message data.
+        Child classes MUST override this to deserialize their specific fields.
+        """
+        assert get_message_data_type(fields) != RedisStreamMessageDataType.UNKNOWN
+        return cls(get_message_data_type(fields))
+
+    # Overwrite it if needed
+    def __str__(self) -> str:
+        return self.__dict__.__str__()
+
 @dataclass
 class RedisStreamMessage():
     stream_name: str
     redis_stream_message_id: str
-    data: Any
+    data: RedisFields
 
 def convert_xreadgroup_response(response: XReadGroupResponseResp2) -> List[RedisStreamMessage]:
     messages: List[RedisStreamMessage] = []
@@ -503,6 +578,8 @@ class RedisStreamConsumer(AsyncService):
                     # Update last message time when messages are received
                     self._last_message_time = asyncio.get_event_loop().time()
                     await self._process_response(response, is_claimed=False)
+
+                # TODO: add delay between reads
 
             except asyncio.CancelledError:
                 break
