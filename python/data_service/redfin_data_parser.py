@@ -6,7 +6,7 @@ from typing import (
 )
 from enum import Enum
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import uuid
 
@@ -26,7 +26,8 @@ from shared.iproperty import (
     IPropertyHistoryEvent,
     IPropertyMetadata,
 )
-from shared.iproperty_address import IPropertyAddress, InvalidAddressError
+from shared.iproperty_address import IPropertyAddress
+from shared.utils import parse_datetime_as_utc
 
 # def parse_raw_data_to_property(raw_property_data: RawPropertyData, existing_property: IProperty) -> Tuple[IPropertyMetadata, IPropertyHistory]:
 #     """
@@ -167,28 +168,28 @@ def validate_redfin_property_entry(entry: RawPropertyData) -> None:
             error_data = entry.price
         )
 
-def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datetime:
-    """
-    Parse scrapedAt timestamp, ensuring it's timezone-aware and in UTC.
+# def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datetime:
+#     """
+#     Parse scrapedAt timestamp, ensuring it's timezone-aware and in UTC.
 
-    Args:
-        datetime_str: datetime string (with or without timezone info)
-        format: datetime string format; None means ISO format
+#     Args:
+#         datetime_str: datetime string (with or without timezone info)
+#         format: datetime string format; None means ISO format
 
-    Returns:
-        datetime object in UTC timezone
-    """
-    # Parse the timestamp (works for both timezone-aware and timezone-naive formats)
-    dt: datetime = datetime.strptime(datetime_str, format) if format else datetime.fromisoformat(datetime_str)
+#     Returns:
+#         datetime object in UTC timezone
+#     """
+#     # Parse the timestamp (works for both timezone-aware and timezone-naive formats)
+#     dt: datetime = datetime.strptime(datetime_str, format) if format else datetime.fromisoformat(datetime_str)
 
-    if dt.tzinfo is None:
-        # Timezone-naive datetime - assume Pacific Time (UTC-8)
-        pacific_tz = ZoneInfo("America/Los_Angeles")
-        dt = dt.replace(tzinfo=pacific_tz)
-        return dt.astimezone(timezone.utc)
-    else:
-        # Already timezone-aware - convert to UTC if not already
-        return dt.astimezone(timezone.utc)
+#     if dt.tzinfo is None:
+#         # Timezone-naive datetime - assume Pacific Time (UTC-8)
+#         pacific_tz = ZoneInfo("America/Los_Angeles")
+#         dt = dt.replace(tzinfo=pacific_tz)
+#         return dt.astimezone(timezone.utc)
+#     else:
+#         # Already timezone-aware - convert to UTC if not already
+#         return dt.astimezone(timezone.utc)
 
 def parse_property_history(
         data: RawPropertyData,

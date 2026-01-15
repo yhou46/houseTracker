@@ -19,6 +19,7 @@ from .monolith_config import (
     AWS_REGION,
     )
 from ..redfin_parser import parse_property_page, parse_property_sublinks
+from ..aws_s3_pipeline import AwsS3Pipeline
 from shared.logger_factory import configure_logger
 
 class RedfinSpiderMonolith(scrapy.Spider):
@@ -49,7 +50,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
         # Pipelines
         "ITEM_PIPELINES": {
             "redfin_spider.pipelines.JsonlPipeline": 300,
-            "redfin_spider.pipelines.AwsS3Pipeline": 301,
+            "redfin_spider.aws_s3_pipeline.AwsS3Pipeline": 301,
         },
 
         # Playwright specific settings
@@ -98,11 +99,15 @@ class RedfinSpiderMonolith(scrapy.Spider):
 
         # Set up AWS S3 settings
         spider.settings.set(
-            "AWS_S3_BUCKET_NAME", AWS_S3_BUCKET_NAME, priority="spider",
+            AwsS3Pipeline.aws_s3_bucket_name_setting, AWS_S3_BUCKET_NAME, priority="spider",
         )
         spider.settings.set(
-            "AWS_REGION", AWS_REGION, priority="spider",
+            AwsS3Pipeline.aws_region_setting, AWS_REGION, priority="spider",
         )
+        # Generate unique worker ID for S3 pipeline
+        worker_id = AwsS3Pipeline.generate_worker_id(cls.name)
+        spider.settings.set(AwsS3Pipeline.worker_id_setting, worker_id, priority="spider")
+        spider.logger.info(f"Generated worker ID for S3 pipeline: {worker_id}")
 
         return spider
 

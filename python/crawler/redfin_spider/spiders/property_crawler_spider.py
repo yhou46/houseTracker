@@ -28,6 +28,7 @@ from .utils import (
 # Import parse function from redfin_parser
 from ..redfin_parser import parse_property_page
 from ..pipelines import PropertyUrlMessageData
+from ..aws_s3_pipeline import AwsS3Pipeline
 
 from shared.logger_factory import configure_logger
 from shared.redis_stream_util import (
@@ -138,11 +139,15 @@ class PropertyCrawlerSpider(scrapy.Spider):
             aws_s3_bucket_name = aws_s3_config.get("bucket_name")
             aws_s3_region = aws_s3_config.get("region")
             spider.settings.set(
-                "AWS_S3_BUCKET_NAME", aws_s3_bucket_name, priority="spider",
+                AwsS3Pipeline.aws_s3_bucket_name_setting, aws_s3_bucket_name, priority="spider",
             )
             spider.settings.set(
-                "AWS_REGION", aws_s3_region, priority="spider",
+                AwsS3Pipeline.aws_region_setting, aws_s3_region, priority="spider",
             )
+            # Generate unique worker ID for S3 pipeline
+            worker_id = AwsS3Pipeline.generate_worker_id(cls.name)
+            spider.settings.set(AwsS3Pipeline.worker_id_setting, worker_id, priority="spider")
+            spider.logger.info(f"Generated worker ID for S3 pipeline: {worker_id}")
 
             # Set json pipeline (debug only)
             output_directory = os.path.join(os.path.dirname(__file__), "..", f"{cls.name}_output")
@@ -155,6 +160,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
             spider.settings.set(
                 "JSONL_OUTPUT_FILE", output_filename, priority="spider",
             )
+
 
 
         except FileNotFoundError as e:
