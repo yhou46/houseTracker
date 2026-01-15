@@ -236,6 +236,7 @@ class RedisStreamConsumerConfig:
     # Reading settings
     read_block_ms: int = 5000  # 5 seconds
     read_batch_size: int = 10  # Batch size
+    read_delay_ms: int | None = None # Optional delay between Redis reads
 
     # Claiming settings
     claim_interval_seconds: int = 15
@@ -579,7 +580,9 @@ class RedisStreamConsumer(AsyncService):
                     self._last_message_time = asyncio.get_event_loop().time()
                     await self._process_response(response, is_claimed=False)
 
-                # TODO: add delay between reads
+                # Optional delay between reads: useful to control read rate
+                if self._consumer_config.read_delay_ms is not None and self._consumer_config.read_delay_ms > 0:
+                    await asyncio.sleep(self._consumer_config.read_delay_ms / 1000.0)
 
             except asyncio.CancelledError:
                 break
@@ -681,9 +684,6 @@ class RedisStreamConsumer(AsyncService):
         messages = convert_xreadgroup_response(response)
         for message in messages:
             await self._process_single_message(message, is_claimed)
-
-    async def _process_message(self, message: RedisStreamMessage) -> None:
-        pass
 
     async def _process_single_message(
         self,

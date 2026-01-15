@@ -78,6 +78,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
         # Pipelines - publish raw data to Redis Stream
         "ITEM_PIPELINES": {
             "redfin_spider.pipelines.RawDataPublisherPipeline": 100,
+            "redfin_spider.pipelines.AwsS3Pipeline": 101,
             "redfin_spider.pipelines.JsonlPipeline": 200,
         },
     }
@@ -130,7 +131,20 @@ class PropertyCrawlerSpider(scrapy.Spider):
                 priority="spider"
             )
 
-            # Set json pipeline
+            # Set up AWS S3 settings for pipeline
+            aws_s3_config = config.get("aws_s3")
+            if not aws_s3_config:
+                raise ValueError("Missing 'aws_s3' configuration in config file")
+            aws_s3_bucket_name = aws_s3_config.get("bucket_name")
+            aws_s3_region = aws_s3_config.get("region")
+            spider.settings.set(
+                "AWS_S3_BUCKET_NAME", aws_s3_bucket_name, priority="spider",
+            )
+            spider.settings.set(
+                "AWS_REGION", aws_s3_region, priority="spider",
+            )
+
+            # Set json pipeline (debug only)
             output_directory = os.path.join(os.path.dirname(__file__), "..", f"{cls.name}_output")
             os.makedirs(output_directory, exist_ok=True)
             spider.settings.set(
@@ -195,9 +209,6 @@ class PropertyCrawlerSpider(scrapy.Spider):
             socket_connect_timeout=5,
         )
 
-        # Create URL queue for bridging consumer and spider
-        # self.url_queue = asyncio.Queue()
-
         # Initialize Redis consumer
         property_url_flow = self.config.get("property_url_flow", {})
         redis_consumer_settings = self.config.get("redis_consumer_settings", {})
@@ -208,6 +219,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
             consumer_name_prefix=f"{self.name}",
             read_block_ms=redis_consumer_settings.get("read_block_ms", 5000),
             read_batch_size=redis_consumer_settings.get("read_batch_size", 10),
+            read_delay_ms=redis_consumer_settings.get("read_delay_ms", None),
             claim_interval_seconds=redis_consumer_settings.get("claim_interval_seconds", 15),
             claim_idle_ms=redis_consumer_settings.get("claim_idle_ms", 60000),
             claim_count=redis_consumer_settings.get("claim_count", 10),

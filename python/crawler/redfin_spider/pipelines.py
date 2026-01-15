@@ -33,10 +33,6 @@ from shared.redis_stream_util import (
     MessageParsingError
 )
 
-
-
-
-
 class JsonlPipeline:
     """
     Pipeline to save scraped items to a JSONL file.
@@ -123,7 +119,7 @@ class JsonlPipeline:
             # Don't crash the spider, just log the error and continue
             return item
 
-
+# TODO: debug: when multip workers, some upload overwrite others?
 class AwsS3Pipeline:
     """
     Pipeline to save scraped items to AWS S3, grouped by zip code.
@@ -423,9 +419,29 @@ class RedisStreamPublisherPipeline(ABC):
 
     def close_spider(self, spider): # type: ignore[no-untyped-def]
         """
-        Called when spider closes. Flush any remaining items in batch.
+        Called when spider closes. Flush any remaining items in batch, then close Redis connection.
+
+        Ensures operations happen in order:
+        1. Flush remaining batch (if any)
+        2. Close Redis connection
+        3. Log final stats
         """
         pipeline_name = self.__class__.__name__
+
+        # Helper to log final stats
+        def log_final_stats() -> None:
+            spider.logger.info(
+                f"{pipeline_name}: Closed. "
+                f"Total published: {self.total_published}, "
+                f"Total failed: {self.total_failed}"
+            )
+            return
+
+        def handle_connection_close(failure: Any) -> None:
+            if self.redis_client:
+                spider.logger.info(f"{pipeline_name}: Redis connection closed")
+            log_final_stats()
+            return
 
         # Publish any remaining items in batch
         if self.batch:
@@ -435,38 +451,39 @@ class RedisStreamPublisherPipeline(ABC):
             batch_to_publish = self.batch.copy()
             self.batch = []
 
-            # Use deferred_from_coro to bridge asyncio coroutine to Twisted Deferred
-            # This works with AsyncioSelectorReactor
+            # Create deferred for batch flush
             deferred = deferred_from_coro(self._publish_batch_async(batch_to_publish, spider))
 
-            # Add callback to handle completion
-            def handle_close_result(result): # type: ignore[no-untyped-def]
+            # Chain: flush → close connection → log stats
+            def handle_flush_success(result): # type: ignore[no-untyped-def]
                 spider.logger.info(f"{pipeline_name}: Flush completed")
+                # Now close Redis connection
+                if self.redis_client:
+                    spider.logger.info(f"{pipeline_name}: Closing Redis connection")
+                    return deferred_from_coro(self.redis_client.aclose())
                 return result
 
-            def handle_close_error(failure): # type: ignore[no-untyped-def]
+            def handle_flush_error(failure): # type: ignore[no-untyped-def]
                 spider.logger.error(f"{pipeline_name}: Flush failed: {failure.getErrorMessage()}")
+                # Still close connection even if flush failed
+                if self.redis_client:
+                    spider.logger.info(f"{pipeline_name}: Closing Redis connection (after flush error)")
+                    return deferred_from_coro(self.redis_client.aclose())
                 return failure
 
-            deferred.addCallback(handle_close_result)
-            deferred.addErrback(handle_close_error)
+            deferred.addCallback(handle_flush_success)
+            deferred.addErrback(handle_flush_error)
+            deferred.addBoth(handle_connection_close)  # addBoth runs on success OR failure
 
-        # Close Redis connection
-        if self.redis_client:
-            spider.logger.info(f"{pipeline_name}: Closing Redis connection")
-            close_deferred = deferred_from_coro(self.redis_client.aclose())
-
-            def handle_close_conn_result(result): # type: ignore[no-untyped-def]
-                spider.logger.info(f"{pipeline_name}: Redis connection closed")
-                return result
-
-            close_deferred.addCallback(handle_close_conn_result)
-
-        spider.logger.info(
-            f"{pipeline_name}: Closed. "
-            f"Total published: {self.total_published}, "
-            f"Total failed: {self.total_failed}"
-        )
+        else:
+            # No batch to flush, just close connection
+            if self.redis_client:
+                spider.logger.info(f"{pipeline_name}: Closing Redis connection")
+                close_deferred = deferred_from_coro(self.redis_client.aclose())
+                close_deferred.addBoth(handle_connection_close)
+            else:
+                # No batch, no connection - just log final stats immediately
+                log_final_stats()
 
     def process_item(self, item, spider): # type: ignore[no-untyped-def]
         """

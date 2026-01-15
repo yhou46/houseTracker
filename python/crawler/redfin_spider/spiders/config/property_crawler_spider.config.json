@@ -13,12 +13,13 @@
     },
     "redis_consumer_settings": {
         "read_block_ms": 5000,
-        "read_batch_size": 10,
+        "read_batch_size": 5,
+        "read_delay_ms": 5000,
         "claim_interval_seconds": 15,
         "claim_idle_ms": 60000,
         "claim_count": 10,
         "processing_timeout_seconds": 120,
-        "shutdown_when_idle_seconds": 60,
+        "shutdown_when_idle_seconds": 300,
         "trim_interval_seconds": 300,
         "trim_max_len": 10000,
         "trim_approximate": true
@@ -27,5 +28,9 @@
         "CONCURRENT_REQUESTS": 3,
         "DOWNLOAD_DELAY": 2,
         "DOWNLOAD_TIMEOUT": 180
+    },
+    "aws_s3": {
+        "bucket_name": "myhousetracker-99ce79",
+        "region": "us-west-2"
     }
 }

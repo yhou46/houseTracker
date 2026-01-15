@@ -8,7 +8,33 @@
                 "city": "Redmond",
                 "state": "WA",
                 "url": "/city/14913/WA/Redmond"
+            },
+            {
+                "city": "Kirkland",
+                "state": "WA",
+                "url": "/city/9148/WA/Kirkland"
+            },
+            {
+                "city": "Kenmore",
+                "state": "WA",
+                "url": "/city/8944/WA/Kenmore"
+            },
+            {
+                "city": "Bothell",
+                "state": "WA",
+                "url": "/city/29439/WA/Bothell"
+            },
+            {
+                "city": "Lynnwood",
+                "state": "WA",
+                "url": "/city/10421/WA/Lynnwood"
+            },
+            {
+                "city": "Bellevue",
+                "state": "WA",
+                "url": "/city/1387/WA/Bellevue"
             }
+
         ]
     },
     "aws": {
@@ -21,8 +47,7 @@
         "password": null
     },
     "property_url_flow": {
-        "redis_stream_name": "property_url_stream",
-        "redis_consumer_group": "property_url_consumer_group"
+        "redis_stream_name": "property_url_stream"
     },
     "spider_settings": {
 
