@@ -159,6 +159,7 @@ def ensure_bucket_exists(
     logger.info(f"Bucket '{bucket_name}' does not exist, creating it...")
     return create_s3_bucket(bucket_name, region, aws_profile)
 
+# TODO: deprecated?
 def get_s3_key_from_json(json_object: Dict[str, Any], worker_id: str) -> str:
     """
     Generate S3 key using data source, date, and worker ID.

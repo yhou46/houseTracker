@@ -79,7 +79,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
         # Pipelines - publish raw data to Redis Stream
         "ITEM_PIPELINES": {
             "redfin_spider.pipelines.RawDataPublisherPipeline": 100,
-            "redfin_spider.pipelines.AwsS3Pipeline": 101,
+            "redfin_spider.aws_s3_pipeline.AwsS3Pipeline": 101,
             "redfin_spider.pipelines.JsonlPipeline": 200,
         },
     }
@@ -406,9 +406,9 @@ class PropertyCrawlerSpider(scrapy.Spider):
             yield item
 
         except Exception as error:
-            self.logger.error(f"Failed to parse property page {response.url}: {error}")
+            self.logger.error(f"Spider error: failed to parse property page {response.url}: {error}")
             self.properties_failed += 1
-            raise DropItem(f"Failed to parse property page {response.url}: {error}")
+            # raise DropItem(f"Failed to parse property page {response.url}: {error}")
 
     def handle_error(self, failure):  # type: ignore[no-untyped-def]
         """

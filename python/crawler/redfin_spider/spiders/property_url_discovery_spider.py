@@ -10,7 +10,7 @@ Architecture:
 """
 import os
 from datetime import datetime, timezone
-from typing import Any, Iterator
+from typing import Any, Iterator, Set
 from dataclasses import dataclass
 
 import scrapy
@@ -163,6 +163,9 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
         self.urls_discovered = 0
         self.pages_crawled = 0
 
+        # Dedup
+        self.url_set: Set[str] = set()
+
     async def start(self): # type: ignore[no-untyped-def]
         """
         Generate initial requests from config start URLs.
@@ -210,6 +213,11 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
 
         # Yield PropertyUrlItem for each discovered URL
         for property_url in property_urls:
+
+            if property_url in self.url_set:
+                self.logger.warning(f"Found duplicate URLs from input URL: {response.url}")
+                continue
+
             self.urls_discovered += 1
 
             item = PropertyUrlItem()
@@ -217,6 +225,8 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
             item["from_page_url"] = response.url
             item["scraped_at_utc"] = scraped_at_utc
             item["data_source"] = "Redfin"
+
+            self.url_set.add(property_url)
 
             yield item
 

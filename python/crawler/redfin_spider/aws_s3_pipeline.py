@@ -111,7 +111,6 @@ class AwsS3Pipeline:
                     items,
                     spider,
                 )
-                self.total_items_uploaded += len(items)
             except Exception as e:
                 spider.logger.error(
                     f"S3 Pipeline: Error uploading remaining items to S3: {e}"
@@ -122,7 +121,7 @@ class AwsS3Pipeline:
         self._items_map.clear()
 
         spider.logger.info(
-            f"S3 Pipeline: Closed. Total items processed: {self.total_items_received}, "
+            f"S3 Pipeline: Closed. Total items received: {self.total_items_received}, "
             f"Total items uploaded: {self.total_items_uploaded}"
         )
 
