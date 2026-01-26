@@ -215,7 +215,7 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
         for property_url in property_urls:
 
             if property_url in self.url_set:
-                self.logger.warning(f"Found duplicate URLs from input URL: {response.url}")
+                self.logger.warning(f"Found duplicate URL: {property_url} from input URL: {response.url}")
                 continue
 
             self.urls_discovered += 1

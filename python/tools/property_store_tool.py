@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import shared.logger_factory as logger_factory
+from shared.iproperty_address import InvalidAddressError
 from data_service.dynamodb_property_service import DynamoDBPropertyService
 from data_service.iproperty_data_reader import (
     IPropertyDataStream,
@@ -79,8 +80,10 @@ def store_property_from_file(
     dynamoDbService = DynamoDBPropertyService(table_name, region_name=region)
 
     count = 0
+    total_count = 0
     logger.info("Start to save property to DynamoDB")
     for raw_data in reader:
+        total_count += 1
         try:
             metadata, history = parse_raw_data_to_property(raw_data)
             logger.info(f"Processing property with address: {metadata.address}, last updated: {metadata.last_updated}, count: {count}")
@@ -98,7 +101,11 @@ def store_property_from_file(
                     time.sleep(delay_seconds)
         except PropertyDataStreamParsingError as error:
             logger.error(f"Error parsing property data: {error}")
-    logger.info(f"Finished processing. Total properties processed: {count}")
+        except InvalidAddressError as error:
+            logger.error(f"Failed to parse property address: {error}")
+        except Exception as error:
+            logger.error(f"Unknown error: {error}")
+    logger.info(f"Finished processing. Total properties processed: {count}, total count: {total_count}")
 
 def store_properties_to_db(
     property_file_dir: str,
@@ -161,11 +168,11 @@ def main() -> None:
     logger = logger_factory.get_logger(__name__)
 
 
-    property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "redfin_spider_monolith_output")
+    property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "property_crawler_spider_output")
 
     # Edit files below
-    start_file = "redfin_properties_20251218_190316.jsonl"
-    end_file = "redfin_properties_20251218_190316.jsonl"
+    start_file = "redfin_properties_20260122_162044.jsonl"
+    end_file = "redfin_properties_20260123_164019.jsonl"
 
     files = get_list_of_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")

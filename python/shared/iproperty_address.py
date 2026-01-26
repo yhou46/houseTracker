@@ -259,20 +259,23 @@ class IPropertyAddress:
         components = get_address_components(address, logger)
 
         if components.get("street") is None or components.get("street") == "":
-            raise ValueError(f"Invalid address: {address}. Street address is required.")
+            raise InvalidAddressError(f"Invalid address: {address}. Street address is required.", address)
         self._street_name: str = components["street"]
         self._unit: str = components.get("unit", "")
 
         if components.get("city") is None or components.get("city") == "":
-            raise ValueError(f"Invalid address: {address}. City is required.")
+            raise InvalidAddressError(f"Invalid address: {address}. City is required.", address)
         self._city: str = components["city"]
 
         if components.get("state") is None or components.get("state") == "":
-            raise ValueError(f"Invalid address: {address}. State is required.")
+            raise InvalidAddressError(f"Invalid address: {address}. State is required.", address)
         self._state: str = components["state"]
 
         if components.get("zipcode") is None or components.get("zipcode") == "":
-            raise ValueError(f"Invalid address: {address}. Zip code is required.")
+            raise InvalidAddressError(
+                f"Invalid address: {address}. Zip code is required.",
+                address,
+                )
         self._zip_code: str = components["zipcode"]
 
         self._address_hash: str = get_address_hash(address, logger)
