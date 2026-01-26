@@ -16,6 +16,39 @@ from scrapy.exceptions import DropItem
 from shared.aws_s3_util import upload_json_objects, generate_unique_s3_key
 from shared.utils import parse_datetime_as_utc
 
+def get_s3_key_prefix_from_json(json_object: Dict[str, Any], worker_id: str) -> str:
+        """
+        Generate S3 key using data source, date, and worker ID.
+
+        Args:
+            json_object: JSON object containing property data
+            worker_id: Unique worker identifier
+
+        Returns:
+            S3 key in format: {data_source}/{date_str}/{worker_id}.jsonl
+        """
+        redfin_key = "redfinId"
+        is_redfin = redfin_key in json_object
+        data_source = None
+
+        if is_redfin:
+            data_source = 'redfin'
+        else:
+            raise ValueError(f"Failed to determine the data source from JSON object. Data source key: {redfin_key} not found.")
+
+        scraped_at = json_object.get("scrapedAt", None)
+        date_str = None
+        if scraped_at != None:
+            date_str = parse_datetime_as_utc(scraped_at).strftime("%Y%m%d")
+        else:
+            raise ValueError("scrapedAt field is missing in JSON object.")
+
+        if data_source is None or date_str is None:
+            raise ValueError(f"Failed to construct S3 key from JSON object. data_source: {data_source}, date_str: {date_str}")
+
+        s3_path = f"{data_source}/{date_str}/{worker_id}"
+        return s3_path
+
 class AwsS3Pipeline:
     """
     Pipeline to save scraped items to AWS S3 in batches.
@@ -152,27 +185,10 @@ class AwsS3Pipeline:
         Returns:
             S3 key in format: {data_source}/{date_str}/{worker_id}.jsonl
         """
-        redfin_key = "redfinId"
-        is_redfin = redfin_key in json_object
-        data_source = None
-
-        if is_redfin:
-            data_source = 'redfin'
-        else:
-            raise ValueError(f"Failed to determine the data source from JSON object. Data source key: {redfin_key} not found.")
-
-        scraped_at = json_object.get("scrapedAt", None)
-        date_str = None
-        if scraped_at != None:
-            date_str = parse_datetime_as_utc(scraped_at).strftime("%Y%m%d")
-        else:
-            raise ValueError("scrapedAt field is missing in JSON object.")
-
-        if data_source is None or date_str is None:
-            raise ValueError(f"Failed to construct S3 key from JSON object. data_source: {data_source}, date_str: {date_str}")
-
-        s3_path = f"{data_source}/{date_str}/{self.worker_id}"
-        return s3_path
+        return get_s3_key_prefix_from_json(
+            json_object,
+            self.worker_id,
+        )
 
     def _upload_items_batch(
             self,
