@@ -11,7 +11,7 @@ Architecture:
 """
 import os
 import asyncio
-from datetime import datetime, timezone
+# from datetime import datetime, timezone
 from typing import Any, Iterator
 
 import scrapy
@@ -29,6 +29,7 @@ from .utils import (
 from ..redfin_parser import parse_property_page
 from ..pipelines import PropertyUrlMessageData
 from ..aws_s3_pipeline import AwsS3Pipeline
+from ..pipelines import JsonlPipeline
 
 from shared.logger_factory import configure_logger
 from shared.redis_stream_util import (
@@ -99,10 +100,17 @@ class PropertyCrawlerSpider(scrapy.Spider):
         spider.settings.set("LOG_FILE", log_file_path, priority="spider")
 
         # Load and apply config from JSON file
+        # CONFIG_ENV determines which config file to use:
+        #   - CONFIG_ENV=local -> *.config.local.json (Docker local dev)
+        #   - CONFIG_ENV=aws   -> *.config.aws.json (AWS production)
+        #   - CONFIG_ENV not set -> *.config.json (default, non-Docker)
+        config_env = os.getenv("CONFIG_ENV", "")
+        config_suffix = f".{config_env}" if config_env else ""
+        config_filename = f"property_crawler_spider.config{config_suffix}.json"
         config_path = os.path.join(
             os.path.dirname(__file__),
             "config",
-            "property_crawler_spider.config.json"
+            config_filename
         )
 
         try:
@@ -155,13 +163,12 @@ class PropertyCrawlerSpider(scrapy.Spider):
             spider.settings.set(
                 "JSONL_OUTPUT_DIR", output_directory, priority="spider",
             )
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"redfin_properties_{timestamp}.jsonl"
+            # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file_prefix = "redfin_properties"
+            output_filename = JsonlPipeline.generate_unique_file_name(output_file_prefix)
             spider.settings.set(
                 "JSONL_OUTPUT_FILE", output_filename, priority="spider",
             )
-
-
 
         except FileNotFoundError as e:
             spider.logger.error(f"Config file not found: {e}")

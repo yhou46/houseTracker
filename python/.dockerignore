@@ -1,0 +1,48 @@
+# Python cache and compiled files
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+
+# Logs and output directories
+logs/
+**/logs/
+**/*_output/
+**/*.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker files (not needed inside container)
+docker/
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Documentation
+*.md
+README*
+
+# Development and test files
+*.txt
+mypy.ini
+setupDev.sh
+
+# Directories not needed for spiders
+# tools/
+# data_service/
+
+# Environment and secrets
+.env
+.env.*
+# *.local.json
+# !crawler/redfin_spider/spiders/config/*.local.json

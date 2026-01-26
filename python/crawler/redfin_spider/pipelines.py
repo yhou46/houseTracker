@@ -7,9 +7,10 @@ import json
 import os
 import sys
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Self, cast
 from itemadapter import ItemAdapter
+import uuid
 
 # Scrapy asyncio integration utilities
 import scrapy
@@ -118,6 +119,22 @@ class JsonlPipeline:
             spider.logger.error(f"JSONL Pipeline: Error writing item to file: {e}")
             # Don't crash the spider, just log the error and continue
             return item
+
+    @staticmethod
+    def generate_unique_file_name(prefix: str) -> str:
+        """
+        Generate a unique worker ID using prefix, timestamp, and short UUID.
+
+        Args:
+            prefix: Prefix for the worker ID (typically spider name)
+
+        Returns:
+            Unique worker ID in format: {prefix}_{timestamp}_{short_uuid}
+            Example: property_crawler_spider_20260114_063052_a7f3b9c2
+        """
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        short_uuid = str(uuid.uuid4())[:8]
+        return f"{prefix}_{timestamp}_{short_uuid}.jsonl"
 
 class RedisStreamPublisherPipeline(ABC):
     """

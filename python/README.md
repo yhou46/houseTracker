@@ -4,7 +4,6 @@ cd python
 ```
 
 # TODO:
-- Refactor spider to put raw data into Redis stream
 - Have multiple workers to consume raw data, parse and store to DB
 - Containerize all services and spiders
 - Move it to cloud, run it daily
@@ -39,6 +38,9 @@ government site metadata
 ```shell
 cd houseTracker/python
 export PYTHONPATH="$(pwd):$PYTHONPATH"
+
+# Or run set up script:
+source ./setupDev.sh
 ```
 
 # To run the script
@@ -75,8 +77,19 @@ mypy ./
 
 # Run in docker mode
 ```shell
-# Run in dev mode
+# Start redis
 docker compose -f docker-compose.dev.yml up
+```
+
+```shell
+# Build docker images locally
+docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml build
+
+# Start spiders in local docker mode
+docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml up
+
+# Start spiders in local docker mode with multiple replicas
+docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml up --scale property-crawler-spider=2
 ```
 
 # Update python version in pipenv

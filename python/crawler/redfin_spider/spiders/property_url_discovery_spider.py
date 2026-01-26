@@ -102,10 +102,17 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
         spider.settings.set("LOG_FILE", log_file_path, priority="spider")
 
         # Load and apply config from JSON file
+        # CONFIG_ENV determines which config file to use:
+        #   - CONFIG_ENV=local -> *.config.local.json (Docker local dev)
+        #   - CONFIG_ENV=aws   -> *.config.aws.json (AWS production)
+        #   - CONFIG_ENV not set -> *.config.json (default, non-Docker)
+        config_env = os.getenv("CONFIG_ENV", "")
+        config_suffix = f".{config_env}" if config_env else ""
+        config_filename = f"property_url_discovery_spider.config{config_suffix}.json"
         config_path = os.path.join(
             os.path.dirname(__file__),
             "config",
-            "property_url_discovery_spider.config.json"
+            config_filename
         )
 
         try:
