@@ -2,6 +2,7 @@ import unittest
 import usaddress # type: ignore[import-untyped]
 from datetime import datetime, timezone
 from decimal import Decimal
+import logging
 
 from shared.iproperty import (
     IPropertyHistory,
@@ -15,6 +16,7 @@ from shared.iproperty import (
     AreaUnit,
     )
 from shared.iproperty_address import IPropertyAddress, get_address_components
+from shared.logger_factory import configure_logger
 
 class Test_get_address(unittest.TestCase):
     def test_street_address(self) -> None:
@@ -49,6 +51,12 @@ class Test_IPropertyMetadata(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
+
+        # Set up logger to avoid logging not set errors in target functions
+        configure_logger(
+            log_level=logging.DEBUG,
+        )
+
         # Create shared test data
         self.test_address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
         self.test_area = PropertyArea(Decimal("2000"), AreaUnit.SquareFeet)
@@ -346,6 +354,13 @@ class Test_IPropertyMetadata(unittest.TestCase):
         self.assertFalse(self.base_metadata.is_equal(metadata2, exclude_last_updated=True))
 
 class Test_IPropertyHistoryEvent(unittest.TestCase):
+
+    def setUp(self) -> None:
+        # Set up logger to avoid logging not set errors in target functions
+        configure_logger(
+            log_level=logging.DEBUG,
+        )
+
     def test_equality_identical_events(self) -> None:
         """Test that identical events are equal."""
         event1 = IPropertyHistoryEvent(
@@ -583,6 +598,11 @@ class Test_IPropertyHistory(unittest.TestCase):
         """Set up test fixtures before each test method."""
         super().setUp()
         self.test_last_updated = datetime.now(timezone.utc)
+
+        # Set up logger to avoid logging not set errors in target functions
+        configure_logger(
+            log_level=logging.DEBUG,
+        )
 
     def test_history_events(self) -> None:
         address = IPropertyAddress("1838 Market St,Kirkland, WA 98033")
