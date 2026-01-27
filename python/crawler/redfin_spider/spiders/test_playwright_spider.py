@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 from scrapy_playwright.page import PageMethod  # type: ignore[import-untyped]
 
+from scrapy.http import Response
+
 # TODO: can be removed after testing
 class TestPlaywrightSpider(scrapy.Spider):
     """
@@ -14,7 +16,7 @@ class TestPlaywrightSpider(scrapy.Spider):
 
     def start_requests(self): # type: ignore[no-untyped-def]
         """Start with a Redfin zipcode page to test JavaScript rendering."""
-        test_url = "https://www.redfin.com/zipcode/98109"
+        test_url = "https://www.redfin.com/WA/Lynnwood/3205-200th-Pl-SW-98036/home/101603531"
 
         self.logger.info(f"Starting Playwright test with URL: {test_url}")
 
@@ -29,7 +31,7 @@ class TestPlaywrightSpider(scrapy.Spider):
                     PageMethod('wait_for_timeout', 2000)
                 ]
             },
-            callback=self.parse,
+            callback=self.parse, # type: ignore[arg-type]
             errback=self.errback
         )
 
@@ -59,7 +61,7 @@ class TestPlaywrightSpider(scrapy.Spider):
         # Log some basic info about the page
         self.log_page_info(response)
 
-    def test_selectors(self, response): # type: ignore[no-untyped-def]
+    def test_selectors(self, response: Response) -> None:
         """Test various selectors to see what content is available."""
         self.logger.info("Testing selectors on rendered page...")
 
@@ -101,7 +103,7 @@ class TestPlaywrightSpider(scrapy.Spider):
         if all_links:
             self.logger.info(f"First 5 total links: {all_links[:5]}")
 
-    def log_page_info(self, response): # type: ignore[no-untyped-def]
+    def log_page_info(self, response: Response) -> None:
         """Log basic information about the rendered page."""
         self.logger.info("=== PAGE INFORMATION ===")
         self.logger.info(f"Response URL: {response.url}")
@@ -129,19 +131,13 @@ class TestPlaywrightSpider(scrapy.Spider):
 
         self.logger.info(f"Found Redfin elements: {found_elements}")
 
-        # Check for the specific property link mentioned by the user
-        if '40065234' in response.text:
-            self.logger.info("✅ Found property ID 40065234 in the HTML!")
-        else:
-            self.logger.warning("❌ Property ID 40065234 not found in the HTML")
-
         # Check for React-related content
         if 'react' in response.text.lower() or 'react' in response.css('script::attr(src)').getall():
             self.logger.info("✅ React-related content detected")
         else:
             self.logger.info("ℹ️ No obvious React content detected")
 
-    def errback(self, failure):
+    def errback(self, failure) -> None: # type: ignore[no-untyped-def]
         """Handle any errors during the request."""
         self.logger.error(f"Playwright test failed: {failure.value}")
         self.logger.error(f"Failure type: {type(failure.value).__name__}")

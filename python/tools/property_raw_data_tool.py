@@ -3,12 +3,20 @@
 import os
 import json
 from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    List,
+)
 
 import shared.logger_factory as logger_factory
 from shared.aws_s3_util import (
-    upload_json_objects
+    upload_json_objects,
+    generate_unique_s3_key,
 )
+from shared.utils import parse_datetime_as_utc
 from tools.property_store_tool import get_list_of_files
+from crawler.redfin_spider.aws_s3_pipeline import get_s3_key_prefix_from_json
 
 def store_raw_data_to_storage(
     s3_bucket_name: str,
@@ -29,20 +37,36 @@ def store_raw_data_to_storage(
     files = get_list_of_files(property_file_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_file_dir} to upload to S3.")
 
+    object_map: Dict[str, List[Dict[str, Any]]] = {}
+
     for file_name in files:
         file_path = os.path.join(property_file_dir, file_name)
         logger.info(f"Uploading file {file_path} to S3.")
 
         # Read JSON objects from the file
-        json_objects = []
         with open(file_path, 'r', encoding='utf-8') as file:
             for line in file:
                 json_object = json.loads(line)
-                json_objects.append(json_object)
+                s3_path = get_s3_key_prefix_from_json(
+                    json_object,
+                    "property_raw_data_tool"
+                )
+
+                if s3_path not in object_map:
+                    object_map[s3_path] = []
+
+                object_map[s3_path].append(json_object)
+
+    for key, items in object_map.items():
+        s3_key = generate_unique_s3_key(
+            prefix=key,
+            extension="jsonl",
+        )
 
         upload_json_objects(
-            json_objects,
-            s3_bucket_name,
+            json_objects=items,
+            bucket_name=s3_bucket_name,
+            s3_key=s3_key,
         )
 
 def main() -> None:

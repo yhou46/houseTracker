@@ -7,15 +7,46 @@ property information. It can be used by both the spider and unit tests.
 
 import re
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Dict, Any, Optional, List, Set
 from bs4 import BeautifulSoup
 import json
+
+from dataclasses import dataclass
 
 from shared.iproperty_address import get_address_components
 
 # Set up logging
 import logging
 logger = logging.getLogger(__name__)
+
+class RedfinPropertyParsingErrorType(Enum):
+    AddressParsingError = "AddressParsingError"
+    PropertyStatusParsingError = "PropertyStatusParsingError"
+    Other = "Other"
+
+@dataclass
+class RedfinPropertyParsingError(Exception):
+    # Data must be filled out when creating the error
+    message: str
+    error_type: RedfinPropertyParsingErrorType
+
+    # Fields that can be populated later
+    redfin_link: str | None = None
+    property_id: str | None = None
+    address: str | None = None
+
+    def __str__(self) -> str:
+        """Custom string representation that includes all fields."""
+        parts = [
+            f"message: {self.message}",
+            f"error_type: {self.error_type.value}",
+            f"redfin_link: {self.redfin_link}",
+            f"property_id: {self.property_id}",
+            f"address: {self.address}",
+        ]
+        return ", ".join(parts)
+
 
 def extract_redfin_id(url: str) -> Optional[str]:
     """
@@ -220,15 +251,16 @@ def _parse_property_address(beautiful_soup: BeautifulSoup) -> str:
         "full-address street-address",
     ]
 
+    address_str = ""
     for tag in html_address_tag_list:
         address_tag = beautiful_soup.find("h1", class_=tag)
         if address_tag:
-            address = address_tag.get_text(strip=True)
+            address_str = address_tag.get_text(strip=True)
 
             try:
                 # Try parsing address
-                get_address_components(address)
-                return address
+                get_address_components(address_str)
+                return address_str
             except Exception as error:
                 # Failed to parse the address
                 logger.warning(f"Faled to parse address using the tag: {tag}, error: {error}")
@@ -240,12 +272,12 @@ def _parse_property_address(beautiful_soup: BeautifulSoup) -> str:
     for selector in html_address_css_selectors:
         address_elements = beautiful_soup.select(selector)
         if address_elements and len(address_elements) > 0:
-            address = address_elements[0].get_text(strip=True)
+            address_str = address_elements[0].get_text(strip=True)
 
             try:
                 # Try parsing address
-                get_address_components(address)
-                return address
+                get_address_components(address_str)
+                return address_str
             except Exception as error:
                 # Failed to parse the address
                 logger.warning(f"Faled to parse address using the selector: {selector}, error: {error}")
@@ -268,7 +300,12 @@ def _parse_property_address(beautiful_soup: BeautifulSoup) -> str:
     #         logger.warning(f"Faled to parse address using the title: {title}")
     #     return address
 
-    raise ValueError("Failed to parse address from html page")
+    raise RedfinPropertyParsingError(
+        message="Failed to parse address from html page",
+        error_type=RedfinPropertyParsingErrorType.AddressParsingError,
+        address=address_str,
+    )
+    # raise ValueError("Failed to parse address from html page")
 
 # Example url: https://www.redfin.com/WA/Redmond/Redmond/Plan-2C/home/188825778
 def _parse_property_ready_to_build_tag(beautiful_soup: BeautifulSoup) -> bool:
@@ -323,7 +360,10 @@ def _parse_property_status(beautiful_soup: BeautifulSoup) -> Optional[str]:
                 logger.info(f"Found status: {status_text} with selector: {selector}")
                 return status_text.lower().strip()
 
-    raise ValueError(f"Failed to parse property status")
+    raise RedfinPropertyParsingError(
+        "Failed to parse property status",
+        RedfinPropertyParsingErrorType.PropertyStatusParsingError,
+        )
 
 def parse_property_history(beautiful_soup: BeautifulSoup) -> Dict[str, Any]:
     """
@@ -510,19 +550,24 @@ def parse_property_page(url: str, html_content: str, spider_name: str = "redfin_
     Returns:
         Dictionary containing all extracted property information
     """
-    # Extract basic metadata
-    redfin_id = extract_redfin_id(url)
+    try:
+        # Extract basic metadata
+        redfin_id = extract_redfin_id(url)
 
-    # Parse property details from HTML (includes history)
-    property_details = parse_property_details(html_content)
+        # Parse property details from HTML (includes history)
+        property_details = parse_property_details(html_content)
 
-    # Combine all data
-    result = {
-        'url': url,
-        'redfinId': redfin_id,
-        'scrapedAt': datetime.now(timezone.utc).isoformat(),
-        'spiderName': spider_name,
-        **property_details
-    }
+        # Combine all data
+        result = {
+            'url': url,
+            'redfinId': redfin_id,
+            'scrapedAt': datetime.now(timezone.utc).isoformat(),
+            'spiderName': spider_name,
+            **property_details
+        }
 
-    return result
+        return result
+    except RedfinPropertyParsingError as error:
+        # Populate some error details
+        error.redfin_link = url if error.redfin_link is None else error.redfin_link
+        raise error

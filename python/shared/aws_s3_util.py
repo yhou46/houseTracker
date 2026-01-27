@@ -2,15 +2,20 @@
 S3 utility functions for managing S3 buckets and operations.
 """
 
+from typing import Optional, List, Dict, Any
+import json
+from datetime import datetime, timezone
+import uuid
+
+# boto3 imports
 import boto3
 from botocore.client import BaseClient
 from mypy_boto3_s3 import S3Client
+from mypy_boto3_s3.type_defs import PutObjectRequestTypeDef
 from botocore.exceptions import ClientError
-from typing import Optional, List, Dict, Any
-import json
 
 from shared.logger_factory import configure_logger, get_logger
-from data_service.redfin_data_parser import parse_datetime_as_utc
+from shared.utils import parse_datetime_as_utc
 
 def get_aws_s3_client(
         region: str = "us-west-2",
@@ -154,148 +159,103 @@ def ensure_bucket_exists(
     logger.info(f"Bucket '{bucket_name}' does not exist, creating it...")
     return create_s3_bucket(bucket_name, region, aws_profile)
 
-def get_s3_key_from_json(json_object: Dict[str, Any]) -> str:
-    redfin_key = "redfinId"
-    is_redfin = redfin_key in json_object
-    data_source = None
+def generate_unique_s3_key(
+    prefix: str,
+    extension: str | None,
+    ) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    short_uuid = str(uuid.uuid4())[:8]
 
-    if is_redfin:
-        data_source = 'redfin'
+    if extension is not None and extension != "":
+        return f"{prefix}_{timestamp}_{short_uuid}.{extension}"
     else:
-        raise ValueError(f"Failed to determine the data source from JSON object. Data source key: {redfin_key} not found.")
+        return f"{prefix}_{timestamp}_{short_uuid}"
 
-    scraped_at = json_object.get("scrapedAt", None)
-    date_str = None
-    if scraped_at != None:
-        date_str = parse_datetime_as_utc(scraped_at).strftime("%Y%m%d")
-    else:
-        raise ValueError("scrapedAt field is missing in JSON object.")
-
-    zip_code = json_object.get("zipCode", None)
-
-    if data_source is None or date_str is None or zip_code is None:
-        raise ValueError(f"Failed to construct S3 key from JSON object. data_source: {data_source}, date_str: {date_str}, zip_code: {zip_code}")
-
-    s3_key = f"{data_source}/{date_str}/{zip_code}/{data_source}_{date_str}_{zip_code}.jsonl"
-    return s3_key
-
-def generate_new_s3_key(old_key: str) -> str:
+def is_s3_key_exists(
+        bucket_name: str,
+        object_key: str,
+        s3_client: S3Client,
+        ) -> bool:
     """
-    Generate a new S3 key by incrementing the suffix number in the key.
-
-    Args:
-        old_key: The original S3 key.
-
-    Returns:
-        A new S3 key with an incremented suffix.
+    Checks if an S3 object exists.
     """
-    if '.' not in old_key:
-        raise ValueError("Invalid S3 key format. Key must contain a file extension.")
-
-    # Split the key into base and extension
-    base, extension = old_key.rsplit('.', 1)
-
-    # Split the base into parts once and cache the result
-    parts = base.split('_')
-
-    # Check if the last part is a numeric suffix
-    if parts[-1].isdigit() and len(parts) == 4 :
-        parts[-1] = str(int(parts[-1]) + 1)  # Increment the numeric suffix
-    else:
-        parts.append('1')  # Add the initial suffix
-
-    # Combine the parts back into the base
-    new_base = '_'.join(parts)
-
-    # Combine the new base with the original extension
-    return f"{new_base}.{extension}"
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=object_key)
+        return True # Key exists
+    except ClientError as error:
+        if error.response['Error']['Code'] == '404':
+            # The object does not exist
+            return False
+        else:
+            # Re-raise the exception if it's a different error (e.g., permissions)
+            raise error
 
 def upload_json_objects(
     json_objects: List[Dict[str, Any]],
     bucket_name: str,
+    s3_key: str,
     region: str = "us-west-2",
     aws_profile: Optional[str] = None,
-    continue_if_key_exists: bool = True,
+    overwrite_if_key_exists: bool = False,
 ) -> None:
     """
-    Uploads a list of JSON objects to S3, handling key collisions by generating new keys if needed.
-
-    This function stores each JSON object as a line in a JSONL file in S3. For each unique S3 key (derived from the object),
-    it checks if the key already exists in the bucket:
-      1. If the key does not exist, it creates a new file and uploads the objects.
-      2. If the key exists, it can either skip uploading (if continue_if_key_exists is False),
-         or generate a new key with an incremented suffix and upload the objects there.
-
-    Note: S3 does not support true append operations. This function does not merge with existing content; it only creates new files or new versions with incremented keys.
+    Uploads a list of JSON objects to S3 as a JSONL file.
 
     Args:
         json_objects: List of dictionaries to upload as JSON objects.
         bucket_name: Name of the S3 bucket.
+        s3_key: S3 key (path) for the object.
         region: AWS region (default: 'us-west-2').
         aws_profile: Optional AWS profile name to use for authentication.
-        continue_if_key_exists: If True, generates a new key if the original exists; if False, skips upload for existing keys.
+        overwrite_if_key_exists: If False, raises error if key already exists; if True, overwrites existing key.
 
     Raises:
+        ValueError: If s3_key already exists and overwrite_if_key_exists is False.
         ClientError: If there is an AWS service error during upload.
-        ValueError: If json_objects is empty.
     """
     logger = get_logger(__name__)
-    s3_key_object_map: Dict[str, List[str]] = {}
 
-    # Create jsonl based on s3 key
-    for object in json_objects:
-        key = get_s3_key_from_json(object)
-        if key not in s3_key_object_map:
-            s3_key_object_map[key] = []
-        s3_key_object_map[key].append(json.dumps(object, ensure_ascii=False))
-
-    logger.info(f"Number of unique S3 keys to upload: {len(s3_key_object_map)}")
-
+    if len(json_objects) == 0:
+        logger.info(f"No input objects. Skip the upload")
+        return
 
     # Create S3 client with optional profile
     s3_client = get_aws_s3_client(region=region, aws_profile=aws_profile)
 
-    for key, object_strings in s3_key_object_map.items():
-        key_exists = False
-        try:
-            response = s3_client.get_object(Bucket=bucket_name, Key=key)
-            existing_content = response['Body'].read().decode('utf-8')
-            key_exists = True
-            logger.info(f"existing content: {existing_content}")
-            logger.info(f"S3 key '{key}' exists, will create new key")
+    # Convert JSON objects to JSONL format (one JSON object per line)
+    jsonl_lines = [json.dumps(obj, ensure_ascii=False) for obj in json_objects]
+    content = '\n'.join(jsonl_lines) + '\n'
 
-            if not continue_if_key_exists:
-                logger.warning(f"S3 key '{key}' already exists and continue_if_key_exists is False. Skipping upload.")
-                continue
-        except ClientError as e:
-            if e.response.get('Error', {}).get('Code') == 'NoSuchKey':
-                logger.info(f"S3 key '{key}' does not exist")
-            else:
-                # Re-raise if it's a different error (e.g., access denied)
-                raise
+    try:
+        logger.info(f"Uploading {len(json_objects)} objects to s3://{bucket_name}/{s3_key}")
 
-        try:
-            s3_key = key if not key_exists else generate_new_s3_key(key)
+        # Use IfNoneMatch='*' to fail if key exists (when overwrite_if_key_exists is False)
+        put_object_params: PutObjectRequestTypeDef = {
+            'Bucket': bucket_name,
+            'Key': s3_key,
+            'Body': content.encode('utf-8'),
+            'ContentType': 'application/x-jsonl'
+        }
 
-            content = '\n'.join(object_strings) + '\n'
+        if not overwrite_if_key_exists:
+            put_object_params['IfNoneMatch'] = '*'
 
-            # Upload combined content
-            logger.info(f"Uploading {len(object_strings)} objects to s3://{bucket_name}/{s3_key}")
-            content_type: str = "application/x-jsonl"
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key=s3_key,
-                Body=content.encode('utf-8'),
-                ContentType=content_type
-            )
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', '')
-            error_message = e.response.get('Error', {}).get('Message', str(e))
+        s3_client.put_object(**put_object_params)
+        logger.info(f"Successfully uploaded {len(json_objects)} objects to s3://{bucket_name}/{s3_key}")
+
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        error_message = e.response.get('Error', {}).get('Message', str(e))
+
+        if error_code == 'PreconditionFailed':
+            logger.error(f"S3 key '{s3_key}' already exists and overwrite_if_key_exists is False")
+            raise ValueError(f"S3 key '{s3_key}' already exists") from e
+        else:
             logger.error(f"Error uploading JSON objects to s3://{bucket_name}/{s3_key}: {error_code} - {error_message}")
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error uploading JSON objects to s3://{bucket_name}/{s3_key}: {e}")
-            raise
+    except Exception as e:
+        logger.error(f"Unexpected error uploading JSON objects to s3://{bucket_name}/{s3_key}: {e}")
+        raise
 
 
 if __name__ == "__main__":
@@ -307,12 +267,25 @@ if __name__ == "__main__":
     bucket_name = "myhousetracker-99ce79"
     region = "us-west-2"
 
+    s3_key = "test/20260115/redfin_spider_monolith_20260114_200123_b0bb1d53_1.jsonl"
+
+    s3_client = get_aws_s3_client()
+
+    print(f"s3_key exist: {is_s3_key_exists(bucket_name, s3_key, s3_client)}")
+
     json_objects: List[Dict[str, Any]] = [
-        # Add test JSON objects here
+        {
+            "abc": 12
+        },
+        {
+            "bcd": "hello"
+        }
     ]
+
     upload_json_objects(
         json_objects=json_objects,
         bucket_name=bucket_name,
-        region=region
+        region=region,
+        s3_key=s3_key,
     )
 

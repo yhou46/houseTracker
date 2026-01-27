@@ -1,0 +1,36 @@
+services:
+  # Redis service (local development only)
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - housetracker-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  property-url-discovery-spider:
+    environment:
+      - CONFIG_ENV=local
+      - AWS_PROFILE=${AWS_PROFILE}
+    volumes:
+      - ~/.aws:/root/.aws:ro
+      - ../logs:/houseTracker/python/logs
+
+  property-crawler-spider:
+    environment:
+      - CONFIG_ENV=local
+      - AWS_PROFILE=${AWS_PROFILE}
+    deploy:
+      mode: replicated-job
+      replicas: 2  # Run 2 instances
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ~/.aws:/root/.aws:ro
+      - ../logs:/houseTracker/python/logs
+      - ../crawler/redfin_spider/property_crawler_spider_output:/houseTracker/python/crawler/redfin_spider/property_crawler_spider_output

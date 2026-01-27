@@ -19,13 +19,14 @@ from shared.async_service import run_async_service
 async def produce_messages(
     redis_client: Redis,
     message_count: int,
+    stream_name: str,
     batch_process: bool = False,
     ) -> None:
     """Async Redis stream producer"""
 
     try:
         producer_config = redis_stream_util.RedisStreamProducerConfig(
-            stream_name='mystream',
+            stream_name=stream_name,
             max_batch_size=9,
         )
         producer = redis_stream_util.RedisStreamProducer(
@@ -170,6 +171,12 @@ Examples:
         default=1000,
         help='Maximum length of the stream (for consumer and trimmer modes)'
     )
+    parser.add_argument(
+        '--stream',
+        type=str,
+        default='mystream',
+        help='Redis stream name',
+    )
     args = parser.parse_args()
 
     redis_client = Redis(host='localhost', port=6379, decode_responses=True)
@@ -182,6 +189,7 @@ Examples:
             produce_messages(
                 redis_client,
                 args.count,
+                args.stream,
                 batch_process=False,
             )
         )
@@ -189,7 +197,7 @@ Examples:
         # Consume test
         asyncio.run(consume_stream(
             redis_client,
-            'mystream',
+            args.stream,
             max_stream_size=500,
             approximate=False,
         ))
@@ -197,7 +205,7 @@ Examples:
         # Trim test
         asyncio.run(trim_stream(
             redis_client,
-            'mystream',
+            args.stream,
             max_len=args.maxlen,
             approximate=False,
         ))
