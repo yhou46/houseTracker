@@ -250,7 +250,6 @@ class AwsS3Pipeline:
             item_dict = ItemAdapter(item).asdict()
 
             # Add item to batch
-            # TODO: It still need to parse records and put records in a dict
             s3_key_prefix = self._get_s3_key_prefix_from_json(
                 item_dict,
             )

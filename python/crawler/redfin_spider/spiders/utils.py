@@ -69,7 +69,7 @@ def setup_spider_logging(
 
     return log_file_path
 
-
+# TODO: not used and have bugs since file is not unique
 def setup_output_directory(
     spider_name: str,
     base_directory: str,
@@ -98,7 +98,7 @@ def setup_output_directory(
 
     return output_directory, output_filename
 
-
+# TODO: removed it? since it is no used
 def create_debug_directory(base_directory: str) -> str:
     """
     Create and return debug directory path.
@@ -122,6 +122,7 @@ def create_debug_directory(base_directory: str) -> str:
 # URL Parsing & Extraction
 # =====================================
 
+# TODO: not used. removed later
 def extract_zip_code_from_url(url: str, meta: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """
     Extract zip code from URL or request metadata.
@@ -360,6 +361,7 @@ def find_next_pagination_link(
 # Debugging
 # =====================================
 
+# TODO: remove later? Not used
 def save_html_response_debug(
     response: Response,
     page_type: str,

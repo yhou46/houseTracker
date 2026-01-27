@@ -159,76 +159,6 @@ def ensure_bucket_exists(
     logger.info(f"Bucket '{bucket_name}' does not exist, creating it...")
     return create_s3_bucket(bucket_name, region, aws_profile)
 
-# TODO: deprecated?
-def get_s3_key_from_json(json_object: Dict[str, Any], worker_id: str) -> str:
-    """
-    Generate S3 key using data source, date, and worker ID.
-
-    Args:
-        json_object: JSON object containing property data
-        worker_id: Unique worker identifier
-
-    Returns:
-        S3 key in format: {data_source}/{date_str}/{worker_id}.jsonl
-    """
-    redfin_key = "redfinId"
-    is_redfin = redfin_key in json_object
-    data_source = None
-
-    if is_redfin:
-        data_source = 'redfin'
-    else:
-        raise ValueError(f"Failed to determine the data source from JSON object. Data source key: {redfin_key} not found.")
-
-    scraped_at = json_object.get("scrapedAt", None)
-    date_str = None
-    if scraped_at != None:
-        date_str = parse_datetime_as_utc(scraped_at).strftime("%Y%m%d")
-    else:
-        raise ValueError("scrapedAt field is missing in JSON object.")
-
-    if data_source is None or date_str is None:
-        raise ValueError(f"Failed to construct S3 key from JSON object. data_source: {data_source}, date_str: {date_str}")
-
-    s3_key = f"{data_source}/{date_str}/{worker_id}.jsonl"
-    return s3_key
-
-# def generate_new_s3_key(old_key: str) -> str:
-#     """
-#     Generate a new S3 key by incrementing the suffix number in the key.
-
-#     Handles keys like:
-#     - redfin/20260114/worker_id.jsonl -> redfin/20260114/worker_id__1.jsonl
-#     - redfin/20260114/worker_id__1.jsonl -> redfin/20260114/worker_id__2.jsonl
-
-#     Args:
-#         old_key: The original S3 key.
-
-#     Returns:
-#         A new S3 key with an incremented suffix.
-#     """
-#     if '.' not in old_key:
-#         raise ValueError("Invalid S3 key format. Key must contain a file extension.")
-
-#     # Split the key into base and extension
-#     base, extension = old_key.rsplit('.', 1)
-
-#     # Check if the base ends with __N (double underscore and numeric suffix)
-#     if '__' in base:
-#         base_parts = base.rsplit('__', 1)
-#         if base_parts[-1].isdigit():
-#             # Increment existing suffix
-#             new_base = f"{base_parts[0]}__{int(base_parts[-1]) + 1}"
-#         else:
-#             # Has __ but not numeric suffix, add __1
-#             new_base = f"{base}__1"
-#     else:
-#         # No suffix at all, add __1
-#         new_base = f"{base}__1"
-
-#     # Combine the new base with the original extension
-#     return f"{new_base}.{extension}"
-
 def generate_unique_s3_key(
     prefix: str,
     extension: str | None,
@@ -352,9 +282,6 @@ if __name__ == "__main__":
         }
     ]
 
-    # json_objects: List[Dict[str, Any]] = [
-    #     # Add test JSON objects here
-    # ]
     upload_json_objects(
         json_objects=json_objects,
         bucket_name=bucket_name,

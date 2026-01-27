@@ -12,6 +12,7 @@ cd python
 - Add USPS address verification if address parsing failed. Try to include those with wrong addresses: like vacant land and ready to built properties
 - Add/Create #MLS and parcelNumber (tax) to property
 - How to track if property basic propery changed? Like area change and room change? Add last update time?
+- monolith spider has some duplicate code that are implemented in utils.ts, consider refactor the code to reduce duplication
 
 
 - 3 tables:

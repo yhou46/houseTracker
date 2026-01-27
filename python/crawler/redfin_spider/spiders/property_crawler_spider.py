@@ -163,7 +163,6 @@ class PropertyCrawlerSpider(scrapy.Spider):
             spider.settings.set(
                 "JSONL_OUTPUT_DIR", output_directory, priority="spider",
             )
-            # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file_prefix = "redfin_properties"
             output_filename = JsonlPipeline.generate_unique_file_name(output_file_prefix)
             spider.settings.set(
@@ -329,15 +328,6 @@ class PropertyCrawlerSpider(scrapy.Spider):
 
             # Extract message data
             message_data = PropertyUrlMessageData.from_redis_fields(message.data)
-
-            # property_url = message.data.get("property_url")
-            # from_page_url = message.data.get("from_page_url", "")
-            # scraped_at_utc = message.data.get("scraped_at_utc", "")
-            # data_source = message.data.get("data_source", "Redfin")
-
-            # if not property_url:
-            #     self.logger.warning(f"Message missing property_url: {message.data}")
-            #     return
 
             self.logger.debug(
                 f"Received property URL from Redis: {message_data.property_url} "
