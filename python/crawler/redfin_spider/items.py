@@ -6,6 +6,17 @@
 import scrapy
 
 
+class PropertyUrlItem(scrapy.Item):
+    """
+    Item for property URLs discovered from search results.
+    Used by PropertyUrlDiscoverySpider to publish URLs to Redis Stream.
+    """
+    property_url = scrapy.Field()       # Absolute URL to property page
+    from_page_url = scrapy.Field()      # Search page URL where discovered
+    scraped_at_utc = scrapy.Field()     # ISO formatted UTC timestamp
+    data_source = scrapy.Field()        # Data source name (e.g., "Redfin")
+
+
 class RedfinPropertyItem(scrapy.Item):
     # Basic property information
     address = scrapy.Field()
@@ -20,7 +31,7 @@ class RedfinPropertyItem(scrapy.Item):
     historyCount = scrapy.Field()
     price = scrapy.Field()
     readyToBuildTag = scrapy.Field()
-    
+
     # Additional metadata
     url = scrapy.Field()
     redfinId = scrapy.Field()

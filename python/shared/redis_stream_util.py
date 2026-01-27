@@ -9,7 +9,9 @@ from typing import (
     Tuple,
     Union,
 )
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 
 import datetime
 import uuid
@@ -234,6 +236,7 @@ class RedisStreamConsumerConfig:
     # Reading settings
     read_block_ms: int = 5000  # 5 seconds
     read_batch_size: int = 10  # Batch size
+    read_delay_ms: int | None = None # Optional delay between Redis reads
 
     # Claiming settings
     claim_interval_seconds: int = 15
@@ -286,11 +289,84 @@ def validate_xreadgroup_response(response: Any) -> bool:
 
     return True
 
+class RedisStreamMessageDataType(str, Enum):
+    """Enum for different message types"""
+    UNKNOWN = "UNKNOWN" # Should never be used
+    TEST = "TEST"
+    PROPERTY_URL = "PROPERTY_URL"
+    PROPERTY_RAW_DATA = "PROPERTY_RAW_DATA"
+    # Add more types as needed
+
+class RedisStreamMessageError(Exception):
+    """Base exception for Redis stream message errors"""
+    pass
+
+class MessageParsingError(RedisStreamMessageError):
+    """Raised when message data cannot be parsed from Redis fields"""
+    def __init__(
+            self,
+            message: str,
+            fields: RedisFields,
+            message_type: RedisStreamMessageDataType | None = None,
+            ):
+        self.fields = fields
+        self.message_type = message_type
+        super().__init__(message)
+
+def get_message_data_type(fields: RedisFields) -> RedisStreamMessageDataType:
+    """Extract message data type from Redis fields"""
+    type_field = fields.get("type")
+    if type_field is None:
+        return RedisStreamMessageDataType.UNKNOWN
+
+    if isinstance(type_field, bytes):
+        type_str = type_field.decode('utf-8')
+    else:
+        type_str = str(type_field)
+
+    try:
+        return RedisStreamMessageDataType(type_str)
+    except ValueError:
+        return RedisStreamMessageDataType.UNKNOWN
+
+class RedisStreamMessageData(ABC):
+    """Base class for all Redis stream message data"""
+
+    def __init__(
+            self,
+            message_type: RedisStreamMessageDataType,
+        ):
+        self.type: RedisStreamMessageDataType = message_type
+
+    @abstractmethod
+    def to_redis_fields(self) -> RedisFields:
+        """
+        Convert message data to Redis fields dictionary.
+        Child classes MUST override this to include their specific fields.
+        """
+        return {
+            "type": self.type.value
+        }
+
+    @classmethod
+    @abstractmethod
+    def from_redis_fields(cls, fields: RedisFields) -> 'RedisStreamMessageData':
+        """
+        Convert Redis fields dictionary to message data.
+        Child classes MUST override this to deserialize their specific fields.
+        """
+        assert get_message_data_type(fields) != RedisStreamMessageDataType.UNKNOWN
+        return cls(get_message_data_type(fields))
+
+    # Overwrite it if needed
+    def __str__(self) -> str:
+        return self.__dict__.__str__()
+
 @dataclass
 class RedisStreamMessage():
     stream_name: str
     redis_stream_message_id: str
-    data: Any
+    data: RedisFields
 
 def convert_xreadgroup_response(response: XReadGroupResponseResp2) -> List[RedisStreamMessage]:
     messages: List[RedisStreamMessage] = []
@@ -504,6 +580,10 @@ class RedisStreamConsumer(AsyncService):
                     self._last_message_time = asyncio.get_event_loop().time()
                     await self._process_response(response, is_claimed=False)
 
+                # Optional delay between reads: useful to control read rate
+                if self._consumer_config.read_delay_ms is not None and self._consumer_config.read_delay_ms > 0:
+                    await asyncio.sleep(self._consumer_config.read_delay_ms / 1000.0)
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -604,9 +684,6 @@ class RedisStreamConsumer(AsyncService):
         messages = convert_xreadgroup_response(response)
         for message in messages:
             await self._process_single_message(message, is_claimed)
-
-    async def _process_message(self, message: RedisStreamMessage) -> None:
-        pass
 
     async def _process_single_message(
         self,

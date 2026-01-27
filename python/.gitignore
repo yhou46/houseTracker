@@ -1,1 +1,4 @@
 temp/**
+
+# Docker environment files (contain secrets)
+docker/.env

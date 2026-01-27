@@ -6,7 +6,7 @@ from typing import (
 )
 from enum import Enum
 from decimal import Decimal
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import uuid
 
@@ -26,7 +26,8 @@ from shared.iproperty import (
     IPropertyHistoryEvent,
     IPropertyMetadata,
 )
-from shared.iproperty_address import IPropertyAddress, InvalidAddressError
+from shared.iproperty_address import IPropertyAddress
+from shared.utils import parse_datetime_as_utc
 
 # def parse_raw_data_to_property(raw_property_data: RawPropertyData, existing_property: IProperty) -> Tuple[IPropertyMetadata, IPropertyHistory]:
 #     """
@@ -167,29 +168,6 @@ def validate_redfin_property_entry(entry: RawPropertyData) -> None:
             error_data = entry.price
         )
 
-def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datetime:
-    """
-    Parse scrapedAt timestamp, ensuring it's timezone-aware and in UTC.
-
-    Args:
-        datetime_str: datetime string (with or without timezone info)
-        format: datetime string format; None means ISO format
-
-    Returns:
-        datetime object in UTC timezone
-    """
-    # Parse the timestamp (works for both timezone-aware and timezone-naive formats)
-    dt: datetime = datetime.strptime(datetime_str, format) if format else datetime.fromisoformat(datetime_str)
-
-    if dt.tzinfo is None:
-        # Timezone-naive datetime - assume Pacific Time (UTC-8)
-        pacific_tz = ZoneInfo("America/Los_Angeles")
-        dt = dt.replace(tzinfo=pacific_tz)
-        return dt.astimezone(timezone.utc)
-    else:
-        # Already timezone-aware - convert to UTC if not already
-        return dt.astimezone(timezone.utc)
-
 def parse_property_history(
         data: RawPropertyData,
         address: IPropertyAddress,
@@ -324,7 +302,7 @@ def parse_property_status(status_str: str, history: IPropertyHistory) -> Propert
             Example: https://www.redfin.com/WA/Bellevue/14651-NE-40th-St-98007/unit-C4/home/25631
             This one's redfin status is OFF MARKET— SOLD JUL 2021 FOR $525,000, but was listed before in DB record, in this case, the status should be list removed, which mean the property is not sold and withdraw by the owner
             """
-            event_type_set: Set[PropertyHistoryEventType] = {
+            list_removed_event_type_set: Set[PropertyHistoryEventType] = {
                 PropertyHistoryEventType.Listed,
                 PropertyHistoryEventType.ReListed,
                 PropertyHistoryEventType.DeListed,
@@ -333,8 +311,14 @@ def parse_property_status(status_str: str, history: IPropertyHistory) -> Propert
                 PropertyHistoryEventType.ListRemoved,
                 PropertyHistoryEventType.Pending,
             }
-            if len(history_events) > 0 and (history_events[-1].event_type in event_type_set):
+            if len(history_events) > 0 and (history_events[-1].event_type in list_removed_event_type_set):
                 return PropertyStatus.ListRemoved
+
+            sold_event_type_set: Set[PropertyHistoryEventType] = {
+                PropertyHistoryEventType.Sold,
+            }
+            if len(history_events) > 0 and (history_events[-1].event_type in sold_event_type_set):
+                return PropertyStatus.Sold
 
         # Handle cases like "soldon aug 5, 2025"
         if status_str.startswith("sold"):

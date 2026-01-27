@@ -1,0 +1,38 @@
+name: housetracker
+
+services:
+  # Property URL Discovery Spider
+  property-url-discovery-spider:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: redfin-spider
+    environment:
+      - SPIDER_NAME=property_url_discovery_spider
+      - CONFIG_ENV=local
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - housetracker-network
+    # profiles:
+    #   - crawler
+
+  # Property Crawler Spider
+  property-crawler-spider:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: redfin-spider
+    environment:
+      - SPIDER_NAME=property_crawler_spider
+      - CONFIG_ENV=local
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - housetracker-network
+
+networks:
+  housetracker-network:
+    driver: bridge

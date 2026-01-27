@@ -1,0 +1,54 @@
+{
+    "start_urls": {
+        "zip_codes": [
+            "98109"
+        ],
+        "cities": [
+            {
+                "city": "Redmond",
+                "state": "WA",
+                "url": "/city/14913/WA/Redmond"
+            },
+            {
+                "city": "Kirkland",
+                "state": "WA",
+                "url": "/city/9148/WA/Kirkland"
+            },
+            {
+                "city": "Kenmore",
+                "state": "WA",
+                "url": "/city/8944/WA/Kenmore"
+            },
+            {
+                "city": "Bothell",
+                "state": "WA",
+                "url": "/city/29439/WA/Bothell"
+            },
+            {
+                "city": "Lynnwood",
+                "state": "WA",
+                "url": "/city/10421/WA/Lynnwood"
+            },
+            {
+                "city": "Bellevue",
+                "state": "WA",
+                "url": "/city/1387/WA/Bellevue"
+            }
+        ]
+    },
+    "aws": {
+        "region": "us-west-2",
+        "s3_bucket_name": "myhousetracker-99ce79"
+    },
+    "redis": {
+        "host": "redis",
+        "port": 6379,
+        "password": null
+    },
+    "property_url_flow": {
+        "redis_stream_name": "property_url_stream"
+    },
+    "spider_settings": {
+
+    }
+}

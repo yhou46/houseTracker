@@ -18,7 +18,8 @@ CITY_URL_MAP: Dict[str, str] = {
     "WA/Kirkland": "https://www.redfin.com/city/9148/WA/Kirkland",
     "WA/Kenmore": "https://www.redfin.com/city/8944/WA/Kenmore",
     "WA/Bothel": "https://www.redfin.com/city/29439/WA/Bothell",
-    "WA/Lynnwood": "https://www.redfin.com/city/10421/WA/Lynnwood"
+    "WA/Lynnwood": "https://www.redfin.com/city/10421/WA/Lynnwood",
+    "WA/Bellevue": "https://www.redfin.com/city/1387/WA/Bellevue",
 }
 
 ENABLE_BROWSER_RENDERING: bool = False  # Whether to enable Playwright for JavaScript rendering

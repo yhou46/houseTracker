@@ -20,10 +20,11 @@ async def main() -> None:
     async def should_trim() -> bool:
         return True
 
+    stream_name = "my_stream"
     trimmer = RedisStreamTrimmer(
             redis_client_trimmer,
             RedisStreamTrimConfig(
-                stream_name='mystream',
+                stream_name=stream_name,
                 trim_interval_seconds=2,  # Trim every 2 seconds
                 trim_max_len=2,
                 trim_approximate=False
@@ -35,6 +36,7 @@ async def main() -> None:
         msg_producer = produce_messages(
             redis_client_producer,
             message_count=10,
+            stream_name=stream_name,
             )
 
         return asyncio.gather(

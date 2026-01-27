@@ -20,7 +20,8 @@ from data_service.iproperty_service import (
     PropertyQueryPattern,
 )
 from crawler.redfin_spider.redfin_parser import (
-    parse_property_page
+    parse_property_page,
+    RedfinPropertyParsingError,
 )
 from data_service.redfin_data_parser import (
     parse_property_history,
@@ -91,6 +92,10 @@ def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyServi
             new_metadata,
             new_history,
         )
+    except RedfinPropertyParsingError as error:
+        error.property_id = property.id
+        error.address = str(property.address)
+        logger.error(f"Failed to parse data from page: {error}")
 
     except Exception as e:
         logger.error(e)
@@ -214,6 +219,7 @@ def scan_and_update2(
                     break
 
         processed_count = 0
+        total_count = len(property_list)
         for index, property in enumerate(property_list):
             try:
                 update_property(property, dynamodb_service)
@@ -227,7 +233,7 @@ def scan_and_update2(
             except Exception as error:
                 logger.error(f"Error processing property ID {property.id}: {error}, last evaluated property ID: {property_list[index - 1].id if index > 0 else 'N/A'}")
                 return
-        logger.info(f"Total processed count: {processed_count}")
+        logger.info(f"Total processed count: {processed_count} / {total_count}")
 
 
 
@@ -247,8 +253,8 @@ def main() -> None:
     )
     scan_and_update2(
         query,
-        # property_id_file = "REDACTEDhouseTracker/python/tools/logs/property_scan_ids_20251216_205558.txt",
-        # last_evaluated_property_id = "c01198bb-7a2b-4196-a820-6854dcbaedb1",
+        # property_id_file = "REDACTEDhouseTracker/python/tools/logs/property_scan_ids_20260116_182117.txt",
+        # last_evaluated_property_id = "e6ed3936-0d12-4206-a61f-81f3699f1055",
     )
 
 
