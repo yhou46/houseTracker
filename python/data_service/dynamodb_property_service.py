@@ -50,9 +50,9 @@ from data_service.redfin_data_parser import (
     PropertyDataStreamParsingError,
 )
 from data_service.iproperty_service import (
-    IPropertyService,
+    IPropertyStorageService,
     PropertyQueryPattern,
-    IPropertyServiceLastEvaluateKeyType,
+    IPropertyStorageServiceLastEvaluateKeyType,
 )
 
 class DynamoDbPropertyTableEntityType(Enum):
@@ -513,9 +513,9 @@ def create_dynambodb_table_for_property(
 
     print(f"Table {table_name} created successfully")
 
-type DynamoDBPropertyServiceLastEvaluatedKeyType = Mapping[str, str]
+type DynamoDBPropertyLastEvaluatedKeyType = Mapping[str, str]
 
-class DynamoDBPropertyService(IPropertyService):
+class DynamoDBPropertyService(IPropertyStorageService):
     def __init__(self, table_name: str, region_name: str = "us-west-2"):
         """
         Initialize DynamoDB service
@@ -695,8 +695,8 @@ class DynamoDBPropertyService(IPropertyService):
         self,
         query: PropertyQueryPattern,
         limit: int | None = None,
-        exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
-        ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
+        exclusive_start_key: DynamoDBPropertyLastEvaluatedKeyType | None = None,
+        ) -> Tuple[List[IProperty], DynamoDBPropertyLastEvaluatedKeyType | None]:
 
         # if not query.status:
         #     raise NotImplementedError("Method not implemented yet")
@@ -853,8 +853,8 @@ class DynamoDBPropertyService(IPropertyService):
         status: PropertyStatus,
         query: PropertyQueryPattern,
         limit: int | None = None,
-        exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
-        ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
+        exclusive_start_key: DynamoDBPropertyLastEvaluatedKeyType | None = None,
+        ) -> Tuple[List[IProperty], DynamoDBPropertyLastEvaluatedKeyType | None]:
         """
         It is highly dependent on the Global Secondary Index created for the table
         """

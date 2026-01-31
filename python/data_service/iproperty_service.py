@@ -100,9 +100,9 @@ class PropertyQueryPattern:
 
         return "PropertyQueryPattern(" + ", ".join(parts) + ")"
 
-type IPropertyServiceLastEvaluateKeyType = Any
+type IPropertyStorageServiceLastEvaluateKeyType = Any
 
-class IPropertyService(ABC):
+class IPropertyStorageService(ABC):
     """
     Read interfaces
     """
@@ -120,8 +120,8 @@ class IPropertyService(ABC):
         self,
         query: PropertyQueryPattern,
         limit: int | None,
-        exclusive_start_key: IPropertyServiceLastEvaluateKeyType,
-        ) -> Tuple[List[IProperty], IPropertyServiceLastEvaluateKeyType | None]:
+        exclusive_start_key: IPropertyStorageServiceLastEvaluateKeyType,
+        ) -> Tuple[List[IProperty], IPropertyStorageServiceLastEvaluateKeyType | None]:
         """
         Return a list of properties that match the query pattern
         1. If the number of results is more than limit, return limit number of results, with exclusive_start_key returned
