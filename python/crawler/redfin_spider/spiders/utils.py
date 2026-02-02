@@ -19,29 +19,6 @@ from shared.logger_factory import LoggerLike
 # Configuration & Setup
 # =====================================
 
-def load_json_config(config_path: str) -> dict[str, Any]:
-    """
-    Load and parse JSON configuration file.
-
-    Args:
-        config_path: Path to JSON config file
-
-    Returns:
-        Parsed configuration dictionary
-
-    Raises:
-        FileNotFoundError: If config file doesn't exist
-        json.JSONDecodeError: If config file is invalid JSON
-    """
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
-
-    return cast(dict[str, Any], config)
-
-
 def setup_spider_logging(
     spider_name: str,
     base_directory: str

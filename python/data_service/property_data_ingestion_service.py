@@ -1,7 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import TypedDict
+from datetime import datetime
 import json
 import os
 import asyncio
+from typing import (
+    Dict,
+    Any,
+)
 
 import redis.asyncio as redisAsync
 
@@ -15,6 +21,7 @@ from shared.redis_stream_util import (
     always_trim,
 )
 from shared.logger_factory import LoggerLike
+from shared.config_util import get_config_from_file
 import shared.logger_factory as logger_factory
 from data_service.dynamodb_property_service import DynamoDBPropertyService
 from data_service.redfin_data_parser import (
@@ -49,6 +56,16 @@ class PropertyDataIngestionServiceConfig:
     dead_letter_stream: str | None = None  # Not implemented yet
 
 
+class IngestionMetrics(TypedDict):
+    """Metrics for property data ingestion."""
+    messages_received: int
+    messages_processed: int
+    messages_failed_parsing: int
+    messages_failed_storage: int
+    messages_failed_total: int
+    started_at: datetime | None
+
+
 class PropertyDataIngestionMessageHandler:
     """
     Message handler for processing raw property data from Redis stream.
@@ -68,6 +85,23 @@ class PropertyDataIngestionMessageHandler:
     ):
         self._property_service = property_service
         self._logger = logger
+        self._metrics: IngestionMetrics = {
+            "messages_received": 0,
+            "messages_processed": 0,
+            "messages_failed_parsing": 0,
+            "messages_failed_storage": 0,
+            "messages_failed_total": 0,
+            "started_at": None,
+        }
+
+    @property
+    def metrics(self) -> IngestionMetrics:
+        """Get current metrics."""
+        return self._metrics.copy()
+
+    def start_tracking(self) -> None:
+        """Start tracking metrics with current timestamp."""
+        self._metrics["started_at"] = datetime.now()
 
     async def __call__(self, message: RedisStreamMessage) -> None:
         """
@@ -77,6 +111,7 @@ class PropertyDataIngestionMessageHandler:
             message: RedisStreamMessage containing raw property data
         """
         message_id = message.redis_stream_message_id
+        self._metrics["messages_received"] += 1
 
         try:
             # Step 1: Deserialize Redis message to RawPropertyMessageData
@@ -98,20 +133,32 @@ class PropertyDataIngestionMessageHandler:
             self._logger.info(f"Parsed property: {property_metadata}, history: {property_history}")
 
             # Step 4: Store to DynamoDB
-            stored_property = self._property_service.create_or_update_property(
-                property_metadata=property_metadata,
-                property_history=property_history,
-            )
+            try:
+                stored_property = self._property_service.create_or_update_property(
+                    property_metadata=property_metadata,
+                    property_history=property_history,
+                )
 
-            self._logger.info(
-                f"Stored property: id={stored_property.id}, "
-                f"address={stored_property.metadata.address}, "
-                f"message_id={message_id}"
-            )
+                self._logger.info(
+                    f"Stored property: id={stored_property.id}, "
+                    f"address={stored_property.metadata.address}, "
+                    f"message_id={message_id}"
+                )
+                self._metrics["messages_processed"] += 1
+
+            except Exception as e:
+                self._metrics["messages_failed_storage"] += 1
+                self._logger.error(
+                    f"Storage error for message {message_id}: {e}",
+                    exc_info=True
+                )
+                raise
 
         except PropertyDataStreamParsingError as e:
             # Log parsing errors but don't re-raise (message will be acknowledged)
             # TODO: Send to dead-letter stream when implemented
+            self._metrics["messages_failed_parsing"] += 1
+            self._metrics["messages_failed_total"] += 1
             self._logger.warning(
                 f"Parsing error for message {message_id}: {e}, "
                 f"error_code={e.error_code.value}, "
@@ -120,13 +167,13 @@ class PropertyDataIngestionMessageHandler:
 
         except Exception as e:
             # Log unexpected errors
-            # TODO: Send to dead-letter stream when implemented
             self._logger.error(
                 f"Unexpected error processing message {message_id}: {e}",
                 exc_info=True
             )
-            # Re-raise to let consumer handle retry logic
-            raise
+            self._metrics["messages_failed_total"] += 1
+
+            # TODO: Send to dead-letter stream when implemented
 
 
 class PropertyDataIngestionService(AsyncService):
@@ -187,6 +234,7 @@ class PropertyDataIngestionService(AsyncService):
             property_service=self._property_service,
             logger=self._logger,
         )
+        self._message_handler.start_tracking()
 
         # Overwrite consumer's shutdown idle seconds
         self._shutdown_when_idle_seconds = self._config.shutdown_when_idle_seconds
@@ -235,11 +283,29 @@ class PropertyDataIngestionService(AsyncService):
         if self._redis_client:
             await self._redis_client.aclose()
 
+        # Log final metrics
+        if self._message_handler:
+            metrics = self._message_handler.metrics
+            self._logger.info(
+                f"Ingestion metrics: "
+                f"received={metrics['messages_received']}, "
+                f"processed={metrics['messages_processed']}, "
+                f"failed_parsing={metrics['messages_failed_parsing']}, "
+                f"failed_storage={metrics['messages_failed_storage']}, "
+                f"started_at={metrics['started_at']}"
+            )
+
         self._running = False
         self._logger.info("PropertyDataIngestionService stopped")
 
     def is_running(self) -> bool:
         return self._running
+
+    def get_metrics(self) -> IngestionMetrics | None:
+        """Get current ingestion metrics."""
+        if self._message_handler:
+            return self._message_handler.metrics
+        return None
 
     """
     ===========================================
@@ -269,11 +335,8 @@ class PropertyDataIngestionService(AsyncService):
         self._logger.debug("Consumer monitor stopped")
 
 
-def load_config_from_file(config_path: str) -> PropertyDataIngestionServiceConfig:
+def get_service_config(config_data: Dict[str, Any]) -> PropertyDataIngestionServiceConfig:
     """Load service configuration from a JSON config file."""
-
-    with open(config_path, 'r') as f:
-        config_data = json.load(f)
 
     redis_section = config_data["redis"]
     redis_config = RedisConfig(
@@ -326,7 +389,7 @@ def load_config_from_file(config_path: str) -> PropertyDataIngestionServiceConfi
 def get_default_config_path() -> str:
     """Get the default config file path relative to this module."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(current_dir, "config", "property_data_ingestion_service.config.json")
+    return os.path.join(current_dir, "config")
 
 
 async def main(config_path: str | None = None) -> int:
@@ -348,12 +411,16 @@ async def main(config_path: str | None = None) -> int:
         config_path = get_default_config_path()
 
     logger.info(f"Loading config from: {config_path}")
-    config = load_config_from_file(config_path)
+    config_data = get_config_from_file(
+        config_file_path=config_path,
+        config_file_prefix="property_data_ingestion_service",
+    )
+    service_config = get_service_config(config_data)
 
     logger.info("Initializing PropertyDataIngestionService...")
 
     # Create service
-    service = PropertyDataIngestionService(config)
+    service = PropertyDataIngestionService(service_config)
 
     # Run service with signal handling
     exit_code = await run_async_service(
@@ -364,11 +431,6 @@ async def main(config_path: str | None = None) -> int:
     return exit_code
 
 # TODO: add shared arg parsing
-# TODO: add shared logic to load config file (local, aws,...)
 if __name__ == "__main__":
-    import sys
-
-    # Allow optional config path as command line argument
-    config_file = sys.argv[1] if len(sys.argv) > 1 else None
-    exit_code = asyncio.run(main(config_file))
+    exit_code = asyncio.run(main())
     exit(exit_code)
