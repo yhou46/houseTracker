@@ -982,7 +982,7 @@ def run_save_test(table_name: str, region: str) -> None:
     redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250818_184641.jsonl")
     print(redfin_output_path)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
 
     print(f"Starting to read Redfin data from {redfin_output_path}. Error file: {error_log_file}")

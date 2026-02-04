@@ -194,7 +194,7 @@ def scan_and_update2(
         # Get property id first
         property_id_file_prefix = "property_scan_ids"
         property_id_file_dir = Path(__file__).resolve().parent / "logs"
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         property_id_file = str(property_id_file_dir / f"{property_id_file_prefix}_{timestamp}.txt")
 
         property_id_file_dir.mkdir(exist_ok=True)

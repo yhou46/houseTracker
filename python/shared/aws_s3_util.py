@@ -15,7 +15,7 @@ from mypy_boto3_s3.type_defs import PutObjectRequestTypeDef
 from botocore.exceptions import ClientError
 
 from shared.logger_factory import configure_logger, get_logger
-from shared.utils import parse_datetime_as_utc
+from shared.utils import parse_datetime_as_utc, generate_unique_time_based_str
 
 def get_aws_s3_client(
         region: str = "us-west-2",
@@ -163,13 +163,12 @@ def generate_unique_s3_key(
     prefix: str,
     extension: str | None,
     ) -> str:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    short_uuid = str(uuid.uuid4())[:8]
 
+    unique_str = generate_unique_time_based_str(prefix)
     if extension is not None and extension != "":
-        return f"{prefix}_{timestamp}_{short_uuid}.{extension}"
+        return f"{unique_str}.{extension}"
     else:
-        return f"{prefix}_{timestamp}_{short_uuid}"
+        return f"{unique_str}"
 
 def is_s3_key_exists(
         bucket_name: str,

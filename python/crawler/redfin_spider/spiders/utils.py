@@ -13,6 +13,7 @@ import logging
 
 from ..redfin_parser import parse_property_sublinks
 from shared.logger_factory import LoggerLike
+from shared.utils import generate_unique_time_based_str
 
 
 # =====================================
@@ -40,9 +41,8 @@ def setup_spider_logging(
     log_directory = os.path.join(base_directory, "..", f"{spider_name}_logs")
     os.makedirs(log_directory, exist_ok=True)
 
-    short_uuid = str(uuid.uuid4())[:8]
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"{spider_name}_{short_uuid}_{timestamp}.log"
+    unique_str = generate_unique_time_based_str(spider_name)
+    log_filename = f"{unique_str}.log"
     log_file_path = os.path.join(log_directory, log_filename)
 
     return log_file_path
@@ -337,7 +337,7 @@ def save_html_response_debug(
     """
     try:
         # Create filename with timestamp and page type
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         filename = f"{page_type}_{timestamp}.html"
         filepath = os.path.join(debug_dir, filename)
 
