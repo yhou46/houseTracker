@@ -116,7 +116,7 @@ if __name__ == "__main__":
     )
     print(redfin_output_path)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
 
     print(f"Starting to read Redfin data from {redfin_output_path}. Error file: {error_log_file}")

@@ -50,9 +50,9 @@ from data_service.redfin_data_parser import (
     PropertyDataStreamParsingError,
 )
 from data_service.iproperty_service import (
-    IPropertyService,
+    IPropertyStorageService,
     PropertyQueryPattern,
-    IPropertyServiceLastEvaluateKeyType,
+    IPropertyStorageServiceLastEvaluateKeyType,
 )
 
 class DynamoDbPropertyTableEntityType(Enum):
@@ -513,9 +513,9 @@ def create_dynambodb_table_for_property(
 
     print(f"Table {table_name} created successfully")
 
-type DynamoDBPropertyServiceLastEvaluatedKeyType = Mapping[str, str]
+type DynamoDBPropertyLastEvaluatedKeyType = Mapping[str, str]
 
-class DynamoDBPropertyService(IPropertyService):
+class DynamoDBPropertyService(IPropertyStorageService):
     def __init__(self, table_name: str, region_name: str = "us-west-2"):
         """
         Initialize DynamoDB service
@@ -695,8 +695,8 @@ class DynamoDBPropertyService(IPropertyService):
         self,
         query: PropertyQueryPattern,
         limit: int | None = None,
-        exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
-        ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
+        exclusive_start_key: DynamoDBPropertyLastEvaluatedKeyType | None = None,
+        ) -> Tuple[List[IProperty], DynamoDBPropertyLastEvaluatedKeyType | None]:
 
         # if not query.status:
         #     raise NotImplementedError("Method not implemented yet")
@@ -853,8 +853,8 @@ class DynamoDBPropertyService(IPropertyService):
         status: PropertyStatus,
         query: PropertyQueryPattern,
         limit: int | None = None,
-        exclusive_start_key: DynamoDBPropertyServiceLastEvaluatedKeyType | None = None,
-        ) -> Tuple[List[IProperty], DynamoDBPropertyServiceLastEvaluatedKeyType | None]:
+        exclusive_start_key: DynamoDBPropertyLastEvaluatedKeyType | None = None,
+        ) -> Tuple[List[IProperty], DynamoDBPropertyLastEvaluatedKeyType | None]:
         """
         It is highly dependent on the Global Secondary Index created for the table
         """
@@ -982,7 +982,7 @@ def run_save_test(table_name: str, region: str) -> None:
     redfin_output_path = os.path.join(python_project_folder, "crawler", "redfin_output", "redfin_properties_20250818_184641.jsonl")
     print(redfin_output_path)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     error_log_file = os.path.join(python_project_folder, "data_service", "error_logs", f"data_reader_errors_{timestamp}.log")
 
     print(f"Starting to read Redfin data from {redfin_output_path}. Error file: {error_log_file}")

@@ -53,7 +53,7 @@ class LoggerFactory:
         # Default to logs directory in project root
         log_dir_path = Path(log_dir)
         log_dir_path.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         return str(log_dir_path / f"{log_file_prefix}_{timestamp}.log")
 
     def _get_log_level(self) -> int:

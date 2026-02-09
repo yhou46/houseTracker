@@ -46,7 +46,7 @@ class TimezoneFixer:
         logs_dir = os.path.join(current_dir, "timezone_fix_logs")
         os.makedirs(logs_dir, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Fix log
         fix_log_file = os.path.join(logs_dir, f"timezone_fix_{timestamp}.log")

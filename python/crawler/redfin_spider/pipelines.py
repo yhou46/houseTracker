@@ -33,6 +33,7 @@ from shared.redis_stream_util import (
     get_message_data_type,
     MessageParsingError
 )
+from shared.utils import generate_unique_time_based_str
 
 class JsonlPipeline:
     """
@@ -58,8 +59,8 @@ class JsonlPipeline:
         # Get output filename from settings, default to timestamp-based name
         output_filename = crawler.settings.get('JSONL_OUTPUT_FILE')
         if not output_filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"redfin_properties_{timestamp}.jsonl"
+            unique_str = generate_unique_time_based_str("redfin_properties")
+            output_filename = f"{unique_str}.jsonl"
 
         pipeline.output_file = output_filename
 
@@ -132,9 +133,8 @@ class JsonlPipeline:
             Unique worker ID in format: {prefix}_{timestamp}_{short_uuid}
             Example: property_crawler_spider_20260114_063052_a7f3b9c2
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        short_uuid = str(uuid.uuid4())[:8]
-        return f"{prefix}_{timestamp}_{short_uuid}.jsonl"
+        unique_str = generate_unique_time_based_str(prefix)
+        return f"{unique_str}.jsonl"
 
 class RedisStreamPublisherPipeline(ABC):
     """
@@ -696,7 +696,7 @@ class RawDataPublisherPipeline(RedisStreamPublisherPipeline):
     stream_name_setting = "RAW_PROPERTY_DATA_STREAM_NAME"
     batch_size_setting = "RAW_DATA_BATCH_SIZE"
     default_stream_name = "raw_property_data_stream"
-    default_batch_size = 50  # Smaller batch size since property data is larger
+    default_batch_size = 10  # Smaller batch size since property data is larger
 
     def _item_to_redis_fields(self, item_dict: dict[str, Any]) -> RawPropertyMessageData:
         """

@@ -30,10 +30,12 @@ RUN pip install --upgrade pip && \
     pip install pipenv && \
     pipenv install --system --deploy --ignore-pipfile
 
-# Copy shared modules (used by all spiders)
+# Copy all source code
 COPY shared/ ./shared/
+COPY data_service/ ./data_service/
+COPY crawler/ ./crawler/
 
-# Set Python path to include shared modules
+# Set Python path
 ENV PYTHONPATH=$APP_PYTHON_HOME
 
 # =============================================================================
@@ -46,11 +48,23 @@ ENV APP_CRAWLER_HOME=$APP_PYTHON_HOME/crawler
 ENV APP_REDFIN_SPIDER_HOME=$APP_CRAWLER_HOME/redfin_spider
 WORKDIR $APP_CRAWLER_HOME
 
-# Copy crawler files
-COPY crawler/ $APP_CRAWLER_HOME/
-
 # Copy entrypoint script
 COPY crawler/redfin_spider/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
+# =============================================================================
+# Stage 3: Data Ingestion Service
+# =============================================================================
+FROM base AS data-ingestion-service
+
+# Set working directory
+WORKDIR $APP_PYTHON_HOME
+
+# Copy entrypoint script
+COPY data_service/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set the entrypoint

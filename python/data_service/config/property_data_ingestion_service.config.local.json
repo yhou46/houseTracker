@@ -1,0 +1,33 @@
+{
+    "redis": {
+        "host": "redis",
+        "port": 6379,
+        "password": null
+    },
+    "stream": {
+        "stream_name": "raw_property_data_stream",
+        "consumer_group": "property_ingestion_service",
+        "consumer_name_prefix": "ingestion"
+    },
+    "consumer_settings": {
+        "read_block_ms": 5000,
+        "read_batch_size": 10,
+        "read_delay_ms": null,
+        "claim_interval_seconds": 15,
+        "claim_idle_ms": 60000,
+        "claim_count": 10,
+        "processing_timeout_seconds": 45,
+        "max_retries": 3,
+        "shutdown_grace_period_seconds": 30
+    },
+    "trimmer_settings": {
+        "trim_interval_seconds": 300,
+        "trim_max_len": 10000,
+        "trim_approximate": true
+    },
+    "dynamodb": {
+        "table_name": "properties",
+        "region": "us-west-2"
+    },
+    "shutdown_when_idle_seconds": 300
+}

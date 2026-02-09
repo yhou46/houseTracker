@@ -91,7 +91,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
         spider.settings.set(
             "JSONL_OUTPUT_DIR", output_directory, priority="spider",
         )
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         output_filename = f"redfin_properties_{timestamp}.jsonl"
         spider.settings.set(
             "JSONL_OUTPUT_FILE", output_filename, priority="spider",
@@ -305,7 +305,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
         """
         try:
             # Create filename with timestamp and page type
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             filename = f"{page_type}_{timestamp}.html"
             filepath = os.path.join(self.debug_dir, filename)
 

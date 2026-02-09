@@ -18,7 +18,6 @@ from scrapy.http import Response
 
 from ..items import PropertyUrlItem
 from .utils import (
-    load_json_config,
     setup_spider_logging,
     generate_start_urls_from_config,
     extract_property_urls_from_response,
@@ -26,6 +25,7 @@ from .utils import (
     find_next_pagination_link,
 )
 from shared.logger_factory import configure_logger
+from shared.config_util import get_config_from_file
 
 
 @dataclass
@@ -101,23 +101,18 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
         )
         spider.settings.set("LOG_FILE", log_file_path, priority="spider")
 
-        # Load and apply config from JSON file
-        # CONFIG_ENV determines which config file to use:
-        #   - CONFIG_ENV=local -> *.config.local.json (Docker local dev)
-        #   - CONFIG_ENV=aws   -> *.config.aws.json (AWS production)
-        #   - CONFIG_ENV not set -> *.config.json (default, non-Docker)
-        config_env = os.getenv("CONFIG_ENV", "")
-        config_suffix = f".{config_env}" if config_env else ""
-        config_filename = f"property_url_discovery_spider.config{config_suffix}.json"
-        config_path = os.path.join(
-            os.path.dirname(__file__),
-            "config",
-            config_filename
-        )
-
         try:
-            config = load_json_config(config_path)
-            spider.logger.info(f"Loaded config from: {config_path}")
+            # Load and apply config from JSON file
+            config_file_prefix = "property_url_discovery_spider"
+            config_file_path = os.path.join(
+                os.path.dirname(__file__),
+                "config",
+            )
+            config = get_config_from_file(
+                config_file_prefix=config_file_prefix,
+                config_file_path=config_file_path,
+            )
+            spider.logger.info(f"Loaded config from: {config_file_path}")
 
             # Store config for spider instance
             spider.config = config

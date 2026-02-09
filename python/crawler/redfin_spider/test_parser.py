@@ -105,7 +105,7 @@ def test_parser_with_url(url: str, callback: Callable[[str], Any]) -> None:
 
             # Create filename with timestamp and URL info
             from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
             filename = f"downloaded_html_{timestamp}.html"
             filepath = debug_dir / filename
@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
     configure_logger()
 
-    url = "https://www.redfin.com/WA/Bothell/23922-38th-Ave-SE-98021/home/195186044"
+    url = "https://www.redfin.com/WA/Lynnwood/3205-200th-Pl-SW-98036/home/101603"
     # Test with live URL (uncomment to test)
     def function_callback(html_str: str) -> None:
         # soup = BeautifulSoup(html_str, "html.parser")

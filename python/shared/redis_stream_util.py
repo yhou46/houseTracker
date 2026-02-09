@@ -482,7 +482,8 @@ class RedisStreamConsumer(AsyncService):
         # self._tasks = [reader_task]
 
         # Start idle monitoring if configured
-        if self._consumer_config.shutdown_when_idle_seconds is not None:
+        shutdown_when_idle_seconds = self._consumer_config.shutdown_when_idle_seconds
+        if shutdown_when_idle_seconds is not None and shutdown_when_idle_seconds > 0:
             idle_monitor_task = asyncio.create_task(self._monitor_idle_shutdown())
             self._tasks.append(idle_monitor_task)
 

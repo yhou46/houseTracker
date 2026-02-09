@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+import uuid
 
 def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datetime:
     """
@@ -23,3 +24,12 @@ def parse_datetime_as_utc(datetime_str: str, format: str | None = None) -> datet
     else:
         # Already timezone-aware - convert to UTC if not already
         return dt.astimezone(timezone.utc)
+
+def generate_unique_time_based_str(prefix: str | None = None) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    short_uuid = str(uuid.uuid4())[:8]
+
+    if prefix is not None:
+        return f"{prefix}_{short_uuid}_{timestamp}"
+    else:
+        return f"{short_uuid}_{timestamp}"
