@@ -290,7 +290,7 @@ class PropertyDataIngestionService(AsyncService):
                 f"Ingestion metrics: "
                 f"received={metrics['messages_received']}, "
                 f"processed={metrics['messages_processed']}, "
-                f"total_failed={metrics['messages_failed_total']}"
+                f"total_failed={metrics['messages_failed_total']},"
                 f"failed_parsing={metrics['messages_failed_parsing']}, "
                 f"failed_storage={metrics['messages_failed_storage']}, "
                 f"started_at={metrics['started_at']}"
