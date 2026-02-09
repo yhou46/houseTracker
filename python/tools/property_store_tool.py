@@ -135,7 +135,7 @@ def store_properties_to_db(
     # Add file path to each file
     targe_files_with_path = [os.path.join(property_file_dir, f) for f in target_files]
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     current_dir = os.path.dirname(os.path.abspath(__file__))
     python_project_folder = os.path.abspath(os.path.join(current_dir, ".."))
     error_log_file = os.path.join(python_project_folder, "tools", "logs", f"data_reader_errors_{timestamp}.log")
@@ -171,8 +171,8 @@ def main() -> None:
     property_data_dir = str(Path(__file__).resolve().parent.parent / "crawler" / "redfin_spider" / "property_crawler_spider_output")
 
     # Edit files below
-    start_file = "redfin_properties_20260122_162044.jsonl"
-    end_file = "redfin_properties_20260123_164019.jsonl"
+    start_file = "redfin_properties_20260129_021610_5c517e7b.jsonl"
+    end_file = "redfin_properties_20260130_041417_f7ccf0b7.jsonl"
 
     files = get_list_of_files(property_data_dir, start_file, end_file)
     logger.info(f"Found {len(files)} files in {property_data_dir}")

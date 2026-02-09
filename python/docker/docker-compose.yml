@@ -9,7 +9,7 @@ services:
       target: redfin-spider
     environment:
       - SPIDER_NAME=property_url_discovery_spider
-      - CONFIG_ENV=local
+      - SERVICE_ENV=local
     depends_on:
       redis:
         condition: service_healthy
@@ -26,12 +26,30 @@ services:
       target: redfin-spider
     environment:
       - SPIDER_NAME=property_crawler_spider
-      - CONFIG_ENV=local
+      - SERVICE_ENV=local
     depends_on:
       redis:
         condition: service_healthy
     networks:
       - housetracker-network
+    # profiles:
+    #   - crawler
+
+  # Property Data Ingestion Service
+  property-data-ingestion-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: data-ingestion-service
+    environment:
+      - SERVICE_ENV=local
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - housetracker-network
+    # profiles:
+    #   - data_ingestion
 
 networks:
   housetracker-network:

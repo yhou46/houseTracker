@@ -151,6 +151,7 @@ def scan_and_update2(
         query: PropertyQueryPattern,
         property_id_file: str | None = None,
         last_evaluated_property_id: str | None = None,
+        enable_delay: bool = True,
         ) -> None:
 
     # Set up logging
@@ -194,7 +195,7 @@ def scan_and_update2(
         # Get property id first
         property_id_file_prefix = "property_scan_ids"
         property_id_file_dir = Path(__file__).resolve().parent / "logs"
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         property_id_file = str(property_id_file_dir / f"{property_id_file_prefix}_{timestamp}.txt")
 
         property_id_file_dir.mkdir(exist_ok=True)
@@ -226,7 +227,7 @@ def scan_and_update2(
                 processed_count += 1
                 logger.info(f"Updated property count: {processed_count}")
 
-                if (index + 1) % 200 == 0:
+                if enable_delay and (index + 1) % 200 == 0:
                     delay_seconds = 60
                     logger.info(f"Processed count: {index + 1}, sleep for {delay_seconds} seconds")
                     time.sleep(delay_seconds)
@@ -247,14 +248,28 @@ def main() -> None:
     )
     logger = logger_factory.get_logger(__name__)
 
-    query = PropertyQueryPattern(
+    logger.info(f"Start to scan pending properties...")
+    scanPendingQuery = PropertyQueryPattern(
+        state="WA",
+        status_list=[PropertyStatus.Pending]
+    )
+    scan_and_update2(
+        scanPendingQuery,
+        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20260116_182117.txt",
+        # last_evaluated_property_id = "e6ed3936-0d12-4206-a61f-81f3699f1055",
+          enable_delay=False,
+    )
+
+    logger.info(f"Start to scan active properties...")
+    scanActiveQuery = PropertyQueryPattern(
         state="WA",
         status_list=[PropertyStatus.Active]
     )
     scan_and_update2(
-        query,
+        scanActiveQuery,
         # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20260116_182117.txt",
         # last_evaluated_property_id = "e6ed3936-0d12-4206-a61f-81f3699f1055",
+        enable_delay=False,
     )
 
 

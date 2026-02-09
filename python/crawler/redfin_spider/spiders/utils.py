@@ -5,7 +5,7 @@ This module contains reusable logic extracted from monolith_spider.py
 to support URL Discovery Spider, Property Crawler Spider, and future spiders.
 """
 import os
-import json
+import uuid
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple, Any, cast
 from scrapy.http import Response
@@ -13,34 +13,12 @@ import logging
 
 from ..redfin_parser import parse_property_sublinks
 from shared.logger_factory import LoggerLike
+from shared.utils import generate_unique_time_based_str
 
 
 # =====================================
 # Configuration & Setup
 # =====================================
-
-def load_json_config(config_path: str) -> dict[str, Any]:
-    """
-    Load and parse JSON configuration file.
-
-    Args:
-        config_path: Path to JSON config file
-
-    Returns:
-        Parsed configuration dictionary
-
-    Raises:
-        FileNotFoundError: If config file doesn't exist
-        json.JSONDecodeError: If config file is invalid JSON
-    """
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
-
-    return cast(dict[str, Any], config)
-
 
 def setup_spider_logging(
     spider_name: str,
@@ -63,40 +41,11 @@ def setup_spider_logging(
     log_directory = os.path.join(base_directory, "..", f"{spider_name}_logs")
     os.makedirs(log_directory, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"{spider_name}_{timestamp}.log"
+    unique_str = generate_unique_time_based_str(spider_name)
+    log_filename = f"{unique_str}.log"
     log_file_path = os.path.join(log_directory, log_filename)
 
     return log_file_path
-
-# TODO: not used and have bugs since file is not unique
-def setup_output_directory(
-    spider_name: str,
-    base_directory: str,
-    file_prefix: str = "output"
-) -> Tuple[str, str]:
-    """
-    Create output directory and generate timestamped filename.
-
-    Args:
-        spider_name: Name of the spider (used in directory name)
-        base_directory: Base directory where output folder will be created
-        file_prefix: Prefix for output filename (default: "output")
-
-    Returns:
-        Tuple of (output_directory_path, output_filename)
-
-    Example:
-        >>> setup_output_directory("property_url_discovery", "/app/spiders", "urls")
-        ("/app/spiders/../property_url_discovery_output", "urls_20260107_123456.jsonl")
-    """
-    output_directory = os.path.join(base_directory, "..", f"{spider_name}_output")
-    os.makedirs(output_directory, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_filename = f"{file_prefix}_{timestamp}.jsonl"
-
-    return output_directory, output_filename
 
 # TODO: removed it? since it is no used
 def create_debug_directory(base_directory: str) -> str:
@@ -388,7 +337,7 @@ def save_html_response_debug(
     """
     try:
         # Create filename with timestamp and page type
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         filename = f"{page_type}_{timestamp}.html"
         filepath = os.path.join(debug_dir, filename)
 

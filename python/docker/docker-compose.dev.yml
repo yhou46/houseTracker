@@ -15,15 +15,15 @@ services:
 
   property-url-discovery-spider:
     environment:
-      - CONFIG_ENV=local
+      - SERVICE_ENV=local
       - AWS_PROFILE=${AWS_PROFILE}
     volumes:
       - ~/.aws:/root/.aws:ro
-      - ../logs:/houseTracker/python/logs
+      - ../crawler/redfin_spider/property_url_discovery_spider_logs:/houseTracker/python/crawler/redfin_spider/property_url_discovery_spider_logs
 
   property-crawler-spider:
     environment:
-      - CONFIG_ENV=local
+      - SERVICE_ENV=local
       - AWS_PROFILE=${AWS_PROFILE}
     deploy:
       mode: replicated-job
@@ -32,5 +32,13 @@ services:
         condition: on-failure
     volumes:
       - ~/.aws:/root/.aws:ro
-      - ../logs:/houseTracker/python/logs
+      - ../crawler/redfin_spider/property_crawler_spider_logs:/houseTracker/python/crawler/redfin_spider/property_crawler_spider_logs
       - ../crawler/redfin_spider/property_crawler_spider_output:/houseTracker/python/crawler/redfin_spider/property_crawler_spider_output
+
+  property-data-ingestion-service:
+    environment:
+      - SERVICE_ENV=local
+      - AWS_PROFILE=${AWS_PROFILE}
+    volumes:
+      - ~/.aws:/root/.aws:ro
+      - ../data_service/property_data_ingestion_logs:/houseTracker/python/data_service/property_data_ingestion_logs

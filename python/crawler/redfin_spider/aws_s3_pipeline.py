@@ -14,7 +14,7 @@ from scrapy.crawler import Crawler
 from scrapy.exceptions import DropItem
 
 from shared.aws_s3_util import upload_json_objects, generate_unique_s3_key
-from shared.utils import parse_datetime_as_utc
+from shared.utils import parse_datetime_as_utc, generate_unique_time_based_str
 
 def get_s3_key_prefix_from_json(json_object: Dict[str, Any], worker_id: str) -> str:
         """
@@ -165,14 +165,8 @@ class AwsS3Pipeline:
 
         Args:
             prefix: Prefix for the worker ID (typically spider name)
-
-        Returns:
-            Unique worker ID in format: {prefix}_{timestamp}_{short_uuid}
-            Example: property_crawler_spider_20260114_063052_a7f3b9c2
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        short_uuid = str(uuid.uuid4())[:8]
-        return f"{prefix}_{timestamp}_{short_uuid}"
+        return generate_unique_time_based_str(prefix)
 
     def _get_s3_key_prefix_from_json(self, json_object: Dict[str, Any]) -> str:
         """
