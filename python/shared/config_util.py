@@ -51,7 +51,7 @@ def get_config_from_file(
     env_values = [env.value for env in ServiceEnvironment ]
 
     if config_env != "" and config_env not in env_values:
-        raise ValueError(f"Invalud {environment_var_name} set up, it should be from {env_values}")
+        raise ValueError(f"Invalid {environment_var_name}={config_env} set up, it should be from {env_values}")
 
     config_suffix = f".{config_env}" if config_env else ""
     config_filename = f"{config_file_prefix}.config{config_suffix}.json"

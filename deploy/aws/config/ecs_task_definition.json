@@ -39,7 +39,7 @@
             "memory": 512,
             "environment": [
                 { "name": "SPIDER_NAME", "value": "property_url_discovery_spider" },
-                { "name": "SERVICE_ENV", "value": "production" }
+                { "name": "SERVICE_ENV", "value": "aws" }
             ],
             "dependsOn": [
                 { "containerName": "redis", "condition": "HEALTHY" }
@@ -60,7 +60,7 @@
             "memory": 512,
             "environment": [
                 { "name": "SPIDER_NAME", "value": "property_crawler_spider" },
-                { "name": "SERVICE_ENV", "value": "production" }
+                { "name": "SERVICE_ENV", "value": "aws" }
             ],
             "dependsOn": [
                 { "containerName": "redis", "condition": "HEALTHY" }
@@ -80,7 +80,7 @@
             "essential": true,
             "memory": 512,
             "environment": [
-                { "name": "SERVICE_ENV", "value": "production" }
+                { "name": "SERVICE_ENV", "value": "aws" }
             ],
             "dependsOn": [
                 { "containerName": "redis", "condition": "HEALTHY" }
