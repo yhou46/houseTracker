@@ -1,0 +1,98 @@
+{
+    "family": "housetracker-daily-scan",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "1024",
+    "memory": "2048",
+    "runtimePlatform": {
+        "cpuArchitecture": "ARM64",
+        "operatingSystemFamily": "LINUX"
+    },
+    "executionRoleArn": "${TASK_EXECUTION_ROLE_ARN}",
+    "taskRoleArn": "${TASK_ROLE_ARN}",
+    "containerDefinitions": [
+        {
+            "name": "redis",
+            "image": "redis:7.2-alpine",
+            "essential": false,
+            "memory": 256,
+            "healthCheck": {
+                "command": ["CMD", "redis-cli", "ping"],
+                "interval": 10,
+                "timeout": 5,
+                "retries": 5,
+                "startPeriod": 5
+            },
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "${LOG_GROUP_NAME}",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "redis"
+                }
+            }
+        },
+        {
+            "name": "property-url-discovery-spider",
+            "image": "${REDFIN_SPIDER_IMAGE}",
+            "essential": true,
+            "memory": 512,
+            "environment": [
+                { "name": "SPIDER_NAME", "value": "property_url_discovery_spider" },
+                { "name": "SERVICE_ENV", "value": "production" }
+            ],
+            "dependsOn": [
+                { "containerName": "redis", "condition": "HEALTHY" }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "${LOG_GROUP_NAME}",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "discovery-spider"
+                }
+            }
+        },
+        {
+            "name": "property-crawler-spider",
+            "image": "${REDFIN_SPIDER_IMAGE}",
+            "essential": true,
+            "memory": 512,
+            "environment": [
+                { "name": "SPIDER_NAME", "value": "property_crawler_spider" },
+                { "name": "SERVICE_ENV", "value": "production" }
+            ],
+            "dependsOn": [
+                { "containerName": "redis", "condition": "HEALTHY" }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "${LOG_GROUP_NAME}",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "crawler-spider"
+                }
+            }
+        },
+        {
+            "name": "property-data-ingestion-service",
+            "image": "${DATA_INGESTION_IMAGE}",
+            "essential": true,
+            "memory": 512,
+            "environment": [
+                { "name": "SERVICE_ENV", "value": "production" }
+            ],
+            "dependsOn": [
+                { "containerName": "redis", "condition": "HEALTHY" }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "${LOG_GROUP_NAME}",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "ingestion-service"
+                }
+            }
+        }
+    ]
+}

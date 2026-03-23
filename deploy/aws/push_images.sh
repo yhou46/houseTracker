@@ -67,6 +67,7 @@ DOCKERFILE_DIR="$(dirname "$0")/../../python"
 
 echo "Building redfin-spider image..."
 docker build \
+    --platform linux/arm64 \
     --target redfin-spider \
     --tag "${REDFIN_SPIDER_REPO}:${IMAGE_TAG}" \
     --file "${DOCKERFILE_DIR}/Dockerfile" \
@@ -75,6 +76,7 @@ docker build \
 echo ""
 echo "Building data-ingestion-service image..."
 docker build \
+    --platform linux/arm64 \
     --target data-ingestion-service \
     --tag "${DATA_INGESTION_REPO}:${IMAGE_TAG}" \
     --file "${DOCKERFILE_DIR}/Dockerfile" \
