@@ -102,9 +102,21 @@ TASK_POLICY="{
                 \"dynamodb:UpdateItem\",
                 \"dynamodb:DeleteItem\",
                 \"dynamodb:Query\",
-                \"dynamodb:Scan\"
+                \"dynamodb:Scan\",
+                \"dynamodb:DescribeTable\",
+                \"dynamodb:BatchWriteItem\",
+                \"dynamodb:BatchGetItem\"
             ],
-            \"Resource\": \"arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/${DYNAMODB_TABLE_NAME}\"
+            \"Resource\": [
+                \"arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/*\",
+                \"arn:aws:dynamodb:${AWS_REGION}:${AWS_ACCOUNT_ID}:table/*/index/*\"
+            ]
+        },
+        {
+            \"Sid\": \"DynamoDBListTables\",
+            \"Effect\": \"Allow\",
+            \"Action\": \"dynamodb:ListTables\",
+            \"Resource\": \"*\"
         },
         {
             \"Sid\": \"S3Access\",
@@ -112,7 +124,9 @@ TASK_POLICY="{
             \"Action\": [
                 \"s3:PutObject\",
                 \"s3:GetObject\",
-                \"s3:ListBucket\"
+                \"s3:ListBucket\",
+                \"s3:HeadBucket\",
+                \"s3:HeadObject\"
             ],
             \"Resource\": [
                 \"arn:aws:s3:::${S3_BUCKET_NAME}\",

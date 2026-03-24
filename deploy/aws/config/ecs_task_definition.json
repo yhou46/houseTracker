@@ -35,7 +35,7 @@
         {
             "name": "property-url-discovery-spider",
             "image": "${REDFIN_SPIDER_IMAGE}",
-            "essential": true,
+            "essential": false,
             "memory": 512,
             "environment": [
                 { "name": "SPIDER_NAME", "value": "property_url_discovery_spider" },
@@ -56,7 +56,7 @@
         {
             "name": "property-crawler-spider",
             "image": "${REDFIN_SPIDER_IMAGE}",
-            "essential": true,
+            "essential": false,
             "memory": 512,
             "environment": [
                 { "name": "SPIDER_NAME", "value": "property_crawler_spider" },
