@@ -24,8 +24,10 @@ generate_date_tag() {
     existing_tags=$(aws ecr list-images \
         --repository-name "${repo_name}" \
         --region "${AWS_REGION}" \
-        --query "imageIds[?starts_with(imageTag, '${date_prefix}.')].imageTag" \
-        --output text 2>/dev/null || echo "")
+        --query "imageIds[*].imageTag" \
+        --output text 2>/dev/null \
+        | tr '\t' '\n' \
+        | grep "^${date_prefix}\." || echo "")
 
     # Find the highest number for today's date
     max_number=-1
