@@ -181,7 +181,7 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
             self.logger.info(f"Start URL: {url}")
             yield scrapy.Request(
                 url=url,
-                callback=self.parse_search_results, # type: ignore[arg-type]
+                callback=self.parse_search_results,
                 errback=self.handle_error,
                 meta={
                     "original_url": url,
@@ -240,7 +240,7 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
             # Follow next page
             yield scrapy.Request(
                 url=next_page_url,
-                callback=self.parse_search_results, # type: ignore[arg-type]
+                callback=self.parse_search_results,
                 errback=self.handle_error,
                 meta={
                     "original_url": response.meta.get("original_url"),
