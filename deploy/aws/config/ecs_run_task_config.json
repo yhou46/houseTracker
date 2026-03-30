@@ -1,0 +1,38 @@
+{
+    "aws": {
+        "region": "us-west-2"
+    },
+    "ecr": {
+        "repository_prefix": "housetracker",
+        "repositories": {
+            "redfin_spider": "housetracker/redfin-spider",
+            "data_ingestion": "housetracker/data-ingestion-service"
+        }
+    },
+    "ecs": {
+        "cluster_name": "housetracker",
+        "task_family": "housetracker-daily-scan"
+    },
+    "iam": {
+        "task_execution_role_name": "housetracker-ecs-task-execution-role",
+        "task_role_name": "housetracker-ecs-task-role",
+        "eventbridge_role_name": "housetracker-eventbridge-ecs-role",
+        "permission_boundary_arn": "arn:aws:iam::aws:policy/PowerUserAccess"
+    },
+    "networking": {
+        "security_group_name": "housetracker-ecs-tasks-sg"
+    },
+    "cloudwatch": {
+        "log_group_name": "/ecs/housetracker",
+        "retention_days": 30
+    },
+    "storage": {
+        "s3_bucket_name": "myhousetracker-99ce79",
+        "dynamodb_table_name": "properties"
+    },
+    "scheduler": {
+        "rule_name": "housetracker-daily-scan",
+        "schedule_expression": "cron(0 2 * * ? *)",
+        "timezone": "America/Los_Angeles"
+    }
+}

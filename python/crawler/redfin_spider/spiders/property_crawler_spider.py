@@ -281,7 +281,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
                 # Yield Scrapy request for this property URL
                 yield scrapy.Request(
                     url=property_url,
-                    callback=self.parse_property_page,  # type: ignore[arg-type]
+                    callback=self.parse_property_page,
                     errback=self.handle_error,
                     meta={
                         "from_page_url": from_page_url,
