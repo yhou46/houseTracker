@@ -13,7 +13,7 @@ TASK_ROLE_NAME="housetracker-ecs-task-role"
 # Permission boundary - caps max permissions any housetracker role can have
 PERMISSION_BOUNDARY_ARN="arn:aws:iam::aws:policy/PowerUserAccess"
 
-# Function to create role if not exists
+# Function to create role with permission boundary if not exists
 create_role_if_not_exists() {
     local role_name=$1
     local assume_role_policy=$2
@@ -26,6 +26,22 @@ create_role_if_not_exists() {
             --role-name "${role_name}" \
             --assume-role-policy-document "${assume_role_policy}" \
             --permissions-boundary "${PERMISSION_BOUNDARY_ARN}" \
+            --output table
+    fi
+}
+
+# Function to create role WITHOUT permission boundary if not exists
+create_role_without_boundary_if_not_exists() {
+    local role_name=$1
+    local assume_role_policy=$2
+
+    if aws iam get-role --role-name "${role_name}" &> /dev/null; then
+        echo "Role already exists: ${role_name}"
+    else
+        echo "Creating role: ${role_name}"
+        aws iam create-role \
+            --role-name "${role_name}" \
+            --assume-role-policy-document "${assume_role_policy}" \
             --output table
     fi
 }
@@ -145,12 +161,63 @@ aws iam put-role-policy \
 
 echo ""
 echo "=========================================="
+echo "Step 3: Create EventBridge Scheduler Role"
+echo "=========================================="
+echo "Purpose: Allows EventBridge Scheduler to trigger ECS tasks"
+echo ""
+
+EVENTBRIDGE_ROLE_NAME="housetracker-eventbridge-ecs-role"
+
+EVENTBRIDGE_TRUST_POLICY='{
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {"Service": "scheduler.amazonaws.com"},
+        "Action": "sts:AssumeRole"
+    }]
+}'
+
+create_role_without_boundary_if_not_exists \
+    "${EVENTBRIDGE_ROLE_NAME}" \
+    "${EVENTBRIDGE_TRUST_POLICY}"
+
+EVENTBRIDGE_POLICY="{
+    \"Version\": \"2012-10-17\",
+    \"Statement\": [
+        {
+            \"Sid\": \"RunEcsTask\",
+            \"Effect\": \"Allow\",
+            \"Action\": \"ecs:RunTask\",
+            \"Resource\": \"arn:aws:ecs:${AWS_REGION}:${AWS_ACCOUNT_ID}:task-definition/*\"
+        },
+        {
+            \"Sid\": \"PassRoleToEcs\",
+            \"Effect\": \"Allow\",
+            \"Action\": \"iam:PassRole\",
+            \"Resource\": \"arn:aws:iam::${AWS_ACCOUNT_ID}:role/*\",
+            \"Condition\": {
+                \"StringEquals\": {
+                    \"iam:PassedToService\": \"ecs-tasks.amazonaws.com\"
+                }
+            }
+        }
+    ]
+}"
+
+echo "Attaching policy to EventBridge role..."
+aws iam put-role-policy \
+    --role-name "${EVENTBRIDGE_ROLE_NAME}" \
+    --policy-name "eventbridge-run-ecs-task" \
+    --policy-document "${EVENTBRIDGE_POLICY}"
+
+echo ""
+echo "=========================================="
 echo "Summary"
 echo "=========================================="
 echo ""
-echo "Save these values for ECS task definition:"
-echo ""
 EXECUTION_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}"
 TASK_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${TASK_ROLE_NAME}"
+EVENTBRIDGE_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${EVENTBRIDGE_ROLE_NAME}"
 echo "  TASK_EXECUTION_ROLE_ARN=${EXECUTION_ROLE_ARN}"
 echo "  TASK_ROLE_ARN=${TASK_ROLE_ARN}"
+echo "  EVENTBRIDGE_ROLE_ARN=${EVENTBRIDGE_ROLE_ARN}"
