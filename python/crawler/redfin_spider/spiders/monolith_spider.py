@@ -141,7 +141,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
         for url in self.start_urls:
             yield scrapy.Request(
                 url=url,
-                callback=self.parse_search_results, # type: ignore[arg-type]
+                callback=self.parse_search_results,
                 meta={
                     'original_url': url,
                     'playwright': ENABLE_BROWSER_RENDERING,
@@ -189,7 +189,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
                 # Pass zip_code through meta so it's available in parse_property_page
                 yield scrapy.Request(
                     url=full_url,
-                    callback=self.parse_property_page, # type: ignore[arg-type]
+                    callback=self.parse_property_page,
                     meta={
                         'original_url': full_url,
                         'zip_code': zip_code  # Pass zip code through meta
@@ -229,7 +229,7 @@ class RedfinSpiderMonolith(scrapy.Spider):
                 self.logger.info(f"Following next page: {next_url}")
                 yield scrapy.Request(
                     url=next_url,
-                    callback=self.parse_search_results, # type: ignore[arg-type]
+                    callback=self.parse_search_results,
                     meta={'zip_code': zip_code}  # Preserve zip code for pagination
                 )
             else:

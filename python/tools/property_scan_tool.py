@@ -46,7 +46,7 @@ def update_property(property: IProperty, dynamodb_service: DynamoDBPropertyServi
 
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
         }
         response = requests.get(source_url, headers=headers)
         item_dict = parse_property_page(
@@ -255,9 +255,7 @@ def main() -> None:
     )
     scan_and_update2(
         scanPendingQuery,
-        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20260116_182117.txt",
-        # last_evaluated_property_id = "e6ed3936-0d12-4206-a61f-81f3699f1055",
-          enable_delay=False,
+          enable_delay=True,
     )
 
     logger.info(f"Start to scan active properties...")
@@ -267,9 +265,7 @@ def main() -> None:
     )
     scan_and_update2(
         scanActiveQuery,
-        # property_id_file = "/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/tools/logs/property_scan_ids_20260116_182117.txt",
-        # last_evaluated_property_id = "e6ed3936-0d12-4206-a61f-81f3699f1055",
-        enable_delay=False,
+        enable_delay=True,
     )
 
 
