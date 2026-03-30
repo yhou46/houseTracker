@@ -31,7 +31,7 @@ class TestPlaywrightSpider(scrapy.Spider):
                     PageMethod('wait_for_timeout', 2000)
                 ]
             },
-            callback=self.parse, # type: ignore[arg-type]
+            callback=self.parse,
             errback=self.errback
         )
 
