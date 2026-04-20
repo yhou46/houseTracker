@@ -830,6 +830,20 @@ class DynamoDBPropertyService(IPropertyStorageService):
             )
             raise err
 
+    def overwrite_property_metadata(
+            self,
+            new_metadata: IPropertyMetadata,
+            property_id: str,
+            ) -> None:
+        """
+        Unconditionally overwrite all property metadata fields in DynamoDB.
+        Use this for manual corrections where you explicitly want to replace everything.
+        Unlike _update_property_metadata, skips timestamp and equality checks.
+        """
+        self.logger.info(f"Overwriting metadata for property {property_id}")
+        item = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
+        self._write_items([item])
+
     def _update_property_history(
             self,
             existing_history: IPropertyHistory,
