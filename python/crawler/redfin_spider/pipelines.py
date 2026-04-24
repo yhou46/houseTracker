@@ -475,12 +475,14 @@ class PropertyUrlMessageData(RedisStreamMessageData):
             scraped_at_utc: str,
             data_source: str,
             from_page_url: str,
+            property_id: str | None = None,
             ) -> None:
         super().__init__(RedisStreamMessageDataType.PROPERTY_URL)
         self.property_url = property_url
         self.scraped_at_utc = scraped_at_utc
         self.data_source = data_source
         self.from_page_url = from_page_url
+        self.property_id = property_id
 
     @classmethod
     def from_redis_fields(cls, fields: RedisFields) -> Self:
@@ -498,6 +500,7 @@ class PropertyUrlMessageData(RedisStreamMessageData):
             scraped_at_utc=cast(str, fields['scraped_at_utc']),
             data_source=cast(str, fields['data_source']),
             from_page_url=cast(str, fields['from_page_url']),
+            property_id=cast(str, fields['property_id']) if fields.get('property_id') else None,
         )
 
     def to_redis_fields(self) -> RedisFields:
@@ -511,6 +514,8 @@ class PropertyUrlMessageData(RedisStreamMessageData):
             'data_source': self.data_source,
             'from_page_url': self.from_page_url,
         })
+        if self.property_id:
+            redis_fields['property_id'] = self.property_id
         return redis_fields
 
     @classmethod
@@ -539,6 +544,7 @@ class RawPropertyMessageData(RedisStreamMessageData):
             zip_code: str,
             scraped_at: str,
             spider_name: str,
+            property_id: str | None = None,
     ) -> None:
         super().__init__(RedisStreamMessageDataType.PROPERTY_RAW_DATA)
         self.data = data  # JSON serialized property data
@@ -547,6 +553,7 @@ class RawPropertyMessageData(RedisStreamMessageData):
         self.zip_code = zip_code
         self.scraped_at = scraped_at
         self.spider_name = spider_name
+        self.property_id = property_id
 
     @classmethod
     def from_redis_fields(cls, fields: RedisFields) -> Self:
@@ -573,6 +580,7 @@ class RawPropertyMessageData(RedisStreamMessageData):
             zip_code=cast(str, fields['zipCode']),
             scraped_at=cast(str, fields['scrapedAt']),
             spider_name=cast(str, fields['spiderName']),
+            property_id=cast(str, fields['propertyId']) if fields.get('propertyId') else None,
         )
 
     def to_redis_fields(self) -> RedisFields:
@@ -588,6 +596,8 @@ class RawPropertyMessageData(RedisStreamMessageData):
             'scrapedAt': self.scraped_at,
             'spiderName': self.spider_name,
         })
+        if self.property_id:
+            redis_fields['propertyId'] = self.property_id
         return redis_fields
 
     @classmethod
@@ -721,6 +731,7 @@ class RawDataPublisherPipeline(RedisStreamPublisherPipeline):
             zip_code=item_dict.get('zipCode', ''),
             scraped_at=item_dict.get('scrapedAt', ''),
             spider_name=item_dict.get('spiderName', ''),
+            property_id=item_dict.get('propertyId'),
         )
 
     def _validate_item(self, item_dict: dict[str, Any], spider: scrapy.Spider) -> bool:
