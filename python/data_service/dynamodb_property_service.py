@@ -803,32 +803,22 @@ class DynamoDBPropertyService(IPropertyStorageService):
             property_id: str,
             ) -> None:
         """
-        Update property metadata
+        Update property metadata using field-level merge: non-null fields from new_metadata
+        overwrite existing, null fields fall back to existing values.
+        status, price, and last_updated are always taken from new_metadata.
+        Skips write if merged result is identical to existing or if existing is newer.
         """
-        if (existing_metadata == new_metadata):
-            self.logger.info("metadata is exactly the same, skip the update")
-            return
-
         if (existing_metadata.last_updated >= new_metadata.last_updated):
             self.logger.info(f"existing metadata last updated {existing_metadata.last_updated} is newer than or same as new metadata last updated {new_metadata.last_updated}, skip the update")
             return
 
-        items_to_be_updated = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
+        merged_metadata = IPropertyMetadata.merge(existing_metadata, new_metadata)
 
-        # TODO: use the _write_items function?
-        try:
-            with self.table.batch_writer() as writer:
-                # Overwrite with new metadata
-                writer.put_item(items_to_be_updated)
+        if merged_metadata == existing_metadata:
+            self.logger.info("metadata is exactly the same after merge, skip the update")
+            return
 
-        except ClientError as err:
-            self.logger.error(
-                "Couldn't load data into table %s. Here's why: %s: %s",
-                self.table.name,
-                err.response["Error"]["Code"],
-                err.response["Error"]["Message"],
-            )
-            raise err
+        self._write_items([convert_property_metadata_to_dynamodb_items(merged_metadata, property_id)])
 
     def overwrite_property_metadata(
             self,
