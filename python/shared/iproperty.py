@@ -400,7 +400,11 @@ class IPropertyMetadata(IPropertyBasic):
             if match is None:
                 merged_sources.append(new_source)
             elif match.source_url != new_source.source_url:
-                match.source_url = new_source.source_url
+                merged_sources[merged_sources.index(match)] = IPropertyDataSource(
+                    source_id=match.source_id,
+                    source_url=new_source.source_url,
+                    source_name=match.source_name,
+                )
         new_data_sources = merged_sources if merged_sources else existing.data_sources
 
         return IPropertyMetadata(
