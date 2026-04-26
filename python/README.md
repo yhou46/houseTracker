@@ -4,15 +4,13 @@ cd python
 ```
 
 # TODO:
-- Have multiple workers to consume raw data, parse and store to DB
-- Containerize all services and spiders
-- Move it to cloud, run it daily
+- Dedup the URLs at group level: URL discover and scan both output the same URL, need to dedup it at Redis level
+- Remove unnecessary logs
+
 - Fix playwright spider
-- Check crawled property count and compare to crawled page, fix errors
 - Add USPS address verification if address parsing failed. Try to include those with wrong addresses: like vacant land and ready to built properties
 - Add/Create #MLS and parcelNumber (tax) to property
-- How to track if property basic propery changed? Like area change and room change? Add last update time?
-- monolith spider has some duplicate code that are implemented in utils.ts, consider refactor the code to reduce duplication
+
 
 
 - 3 tables:
@@ -86,8 +84,11 @@ docker compose -f docker-compose.dev.yml up
 # Build docker images locally
 docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml build
 
-# Start spiders in local docker mode
+# Start all services in local docker mode
 docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml up
+
+# Start a subset of services
+docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml up "service1" "service2"
 
 # Start spiders in local docker mode with multiple replicas
 docker compose -f  docker/docker-compose.yml -f docker/docker-compose.dev.yml up --scale property-crawler-spider=2
