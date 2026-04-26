@@ -38,3 +38,4 @@ class RedfinPropertyItem(scrapy.Item):
     scrapedAt = scrapy.Field()
     spiderName = scrapy.Field()
     zipCode = scrapy.Field()  # Zip code extracted from URL or address
+    propertyId = scrapy.Field()  # DynamoDB property ID, set when re-scanning existing properties

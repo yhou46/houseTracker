@@ -808,15 +808,17 @@ class DynamoDBPropertyService(IPropertyStorageService):
         status, price, and last_updated are always taken from new_metadata.
         Skips write if merged result is identical to existing or if existing is newer.
         """
-        if (existing_metadata.last_updated >= new_metadata.last_updated):
-            self.logger.info(f"existing metadata last updated {existing_metadata.last_updated} is newer than or same as new metadata last updated {new_metadata.last_updated}, skip the update")
-            return
-
         merged_metadata = IPropertyMetadata.merge(existing_metadata, new_metadata)
 
-        if merged_metadata == existing_metadata:
-            self.logger.info("metadata is exactly the same after merge, skip the update")
+        if (existing_metadata.last_updated >= merged_metadata.last_updated and existing_metadata == merged_metadata):
+            self.logger.info(f"Existing metadata last updated {existing_metadata.last_updated} is newer than or same as merged metadata last updated {merged_metadata.last_updated} and metadata entries are exactly the same, skip the update")
             return
+
+        if merged_metadata.last_updated < existing_metadata.last_updated:
+            self.logger.warning(f"Merged metadata's last updated time: {merged_metadata.last_updated} is older than existing metadata's last updated time: {existing_metadata.last_updated}")
+
+        if merged_metadata == existing_metadata:
+            self.logger.info(f"Merged metadata is same as existing metadata, propertyAddress={merged_metadata.address}")
 
         self._write_items([convert_property_metadata_to_dynamodb_items(merged_metadata, property_id)])
 

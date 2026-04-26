@@ -355,6 +355,7 @@ class IPropertyMetadata(IPropertyBasic):
 
     def update_price(self, price: Decimal | None) -> None:
         self._price = price
+        self._last_updated = datetime.now(timezone.utc)
 
     def is_equal(
         self,
