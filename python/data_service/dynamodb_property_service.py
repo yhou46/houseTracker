@@ -810,14 +810,19 @@ class DynamoDBPropertyService(IPropertyStorageService):
         """
         merged_metadata = IPropertyMetadata.merge(existing_metadata, new_metadata)
 
-        if (existing_metadata.last_updated >= merged_metadata.last_updated and existing_metadata == merged_metadata):
+        if (
+            existing_metadata.last_updated >= merged_metadata.last_updated and existing_metadata.is_equal(
+                merged_metadata, exclude_last_updated=True)):
             self.logger.info(f"Existing metadata last updated {existing_metadata.last_updated} is newer than or same as merged metadata last updated {merged_metadata.last_updated} and metadata entries are exactly the same, skip the update")
             return
 
         if merged_metadata.last_updated < existing_metadata.last_updated:
             self.logger.warning(f"Merged metadata's last updated time: {merged_metadata.last_updated} is older than existing metadata's last updated time: {existing_metadata.last_updated}")
 
-        if merged_metadata == existing_metadata:
+        if merged_metadata.is_equal(
+            existing_metadata,
+            exclude_last_updated=True,
+        ):
             self.logger.info(f"Merged metadata is same as existing metadata, propertyAddress={merged_metadata.address}")
 
         self._write_items([convert_property_metadata_to_dynamodb_items(merged_metadata, property_id)])

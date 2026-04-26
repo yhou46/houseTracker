@@ -329,7 +329,10 @@ class IPropertyMetadata(IPropertyBasic):
         super().__init__(address, area, property_type, lot_area, number_of_bedrooms, number_of_bathrooms, year_built)
         self._status = status
         self._price = price
+
+        # Last time a property is scanned(data can be changed or not changed)
         self._last_updated = last_updated
+
         self._data_sources = data_sources
 
     @property
@@ -356,6 +359,9 @@ class IPropertyMetadata(IPropertyBasic):
     def update_price(self, price: Decimal | None) -> None:
         self._price = price
         self._last_updated = datetime.now(timezone.utc)
+
+    def update_last_updated_time(self, last_updated: datetime) -> None:
+        self._last_updated = last_updated
 
     def is_equal(
         self,
