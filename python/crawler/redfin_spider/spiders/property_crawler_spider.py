@@ -392,11 +392,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
             item['propertyId'] = response.meta.get('property_id')
 
             # Log the extracted data
-            self.logger.info(f"Extracted property: {item.get('address', 'Unknown address')}")
-            self.logger.info(f"  - Redfin ID: {item.get('redfinId')}")
-            self.logger.info(f"  - Area: {item.get('area')} sq ft")
-            self.logger.info(f"  - Zip Code: {item.get('zipCode')}")
-            self.logger.info(f"  - Property ID: {item.get('propertyId')}")
+            self.logger.info(f"Extracted property: {item.get('address', 'Unknown address')}, Redfin ID: {item.get('redfinId')}, Zip Code: {item.get('zipCode')}, Property ID if any: {item.get('propertyId')}")
 
             self.properties_crawled += 1
 

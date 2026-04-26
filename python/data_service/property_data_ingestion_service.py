@@ -148,7 +148,7 @@ class PropertyDataIngestionMessageHandler:
             # Step 4: Convert RawPropertyData to IProperty
             property_metadata, property_history = parse_raw_data_to_property(raw_property_data, existing_property)
 
-            self._logger.info(f"Parsed property: {property_metadata}, history: {property_history}")
+            self._logger.info(f"Parsed property: {property_metadata}, numberOfHistoryEvents: {len(property_history.history)}")
 
             # Step 5: Store to DynamoDB
             try:
