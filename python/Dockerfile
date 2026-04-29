@@ -64,8 +64,23 @@ FROM base AS data-ingestion-service
 WORKDIR $APP_PYTHON_HOME
 
 # Copy entrypoint script
-COPY data_service/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY data_service/entrypoints/data-ingestion-service-entrypoint.sh /usr/local/bin/data-ingestion-service-entrypoint.sh
+RUN chmod +x /usr/local/bin/data-ingestion-service-entrypoint.sh
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/data-ingestion-service-entrypoint.sh"]
+
+# =============================================================================
+# Stage 4: Property Scan Service
+# =============================================================================
+FROM base AS property-scan-service
+
+# Set working directory
+WORKDIR $APP_PYTHON_HOME
+
+# Copy entrypoint script
+COPY data_service/entrypoints/property-scan-service-entrypoint.sh /usr/local/bin/property-scan-service-entrypoint.sh
+RUN chmod +x /usr/local/bin/property-scan-service-entrypoint.sh
+
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/property-scan-service-entrypoint.sh"]

@@ -93,6 +93,26 @@
                     "awslogs-stream-prefix": "ingestion-service"
                 }
             }
+        },
+        {
+            "name": "property-scan-service",
+            "image": "${PROPERTY_SCAN_IMAGE}",
+            "essential": false,
+            "memory": 256,
+            "environment": [
+                { "name": "SERVICE_ENV", "value": "aws" }
+            ],
+            "dependsOn": [
+                { "containerName": "redis", "condition": "HEALTHY" }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "${LOG_GROUP_NAME}",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "scan-service"
+                }
+            }
         }
     ]
 }

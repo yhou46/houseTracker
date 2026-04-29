@@ -572,7 +572,7 @@ class RedisStreamConsumer(AsyncService):
                     block=self._consumer_config.read_block_ms
                 )
 
-                self.logger.info(
+                self.logger.debug(
                     f"Received response:\n{response}"
                 )
 

@@ -59,6 +59,8 @@ class PropertyDataIngestionServiceConfig:
 class IngestionMetrics(TypedDict):
     """Metrics for property data ingestion."""
     messages_received: int
+    messages_from_scan_service: int
+    messages_from_scan_service_failed: int
     messages_processed: int
     messages_failed_parsing: int
     messages_failed_storage: int
@@ -87,6 +89,8 @@ class PropertyDataIngestionMessageHandler:
         self._logger = logger
         self._metrics: IngestionMetrics = {
             "messages_received": 0,
+            "messages_from_scan_service": 0,
+            "messages_from_scan_service_failed": 0,
             "messages_processed": 0,
             "messages_failed_parsing": 0,
             "messages_failed_storage": 0,
@@ -112,6 +116,7 @@ class PropertyDataIngestionMessageHandler:
         """
         message_id = message.redis_stream_message_id
         self._metrics["messages_received"] += 1
+        is_from_scan_service = False
 
         try:
             # Step 1: Deserialize Redis message to RawPropertyMessageData
@@ -124,15 +129,28 @@ class PropertyDataIngestionMessageHandler:
             self._logger.info(
                 f"Processing property: url={raw_message.url}, "
                 f"redfin_id={raw_message.redfin_id}, "
-                f"zip_code={raw_message.zip_code}"
+                f"zip_code={raw_message.zip_code}, "
+                f"property_id={raw_message.property_id}"
             )
 
-            # Step 3: Convert RawPropertyData to IProperty
-            property_metadata, property_history = parse_raw_data_to_property(raw_property_data)
+            # Step 3: Look up existing property for merge (re-scan flow) or None (new discovery)
+            existing_property = None
+            if raw_message.property_id:
+                is_from_scan_service = True
+                self._metrics["messages_from_scan_service"] += 1
+                existing_property = self._property_service.get_property_by_id(raw_message.property_id)
+                if not existing_property:
+                    self._logger.warning(
+                        f"property_id {raw_message.property_id} not found in DB, "
+                        f"will proceed without existing property context"
+                    )
 
-            self._logger.info(f"Parsed property: {property_metadata}, history: {property_history}")
+            # Step 4: Convert RawPropertyData to IProperty
+            property_metadata, property_history = parse_raw_data_to_property(raw_property_data, existing_property)
 
-            # Step 4: Store to DynamoDB
+            self._logger.info(f"Parsed property: {property_metadata}, numberOfHistoryEvents: {len(property_history.history)}")
+
+            # Step 5: Store to DynamoDB
             try:
                 stored_property = self._property_service.create_or_update_property(
                     property_metadata=property_metadata,
@@ -159,6 +177,8 @@ class PropertyDataIngestionMessageHandler:
             # TODO: Send to dead-letter stream when implemented
             self._metrics["messages_failed_parsing"] += 1
             self._metrics["messages_failed_total"] += 1
+            if is_from_scan_service:
+                self._metrics["messages_from_scan_service_failed"] += 1
             self._logger.warning(
                 f"Parsing error for message {message_id}: {e}, "
                 f"error_code={e.error_code.value}, "
@@ -172,6 +192,8 @@ class PropertyDataIngestionMessageHandler:
                 exc_info=True
             )
             self._metrics["messages_failed_total"] += 1
+            if is_from_scan_service:
+                self._metrics["messages_from_scan_service_failed"] += 1
 
             # TODO: Send to dead-letter stream when implemented
 
@@ -289,6 +311,8 @@ class PropertyDataIngestionService(AsyncService):
             self._logger.info(
                 f"Ingestion metrics: "
                 f"received={metrics['messages_received']}, "
+                f"from_scan_service={metrics['messages_from_scan_service']}, "
+                f"from_scan_service_failed={metrics['messages_from_scan_service_failed']}, "
                 f"processed={metrics['messages_processed']}, "
                 f"total_failed={metrics['messages_failed_total']},"
                 f"failed_parsing={metrics['messages_failed_parsing']}, "

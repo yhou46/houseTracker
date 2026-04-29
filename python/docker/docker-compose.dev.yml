@@ -18,7 +18,7 @@ services:
       - SERVICE_ENV=local
       - AWS_PROFILE=${AWS_PROFILE}
     volumes:
-      - ~/.aws:/root/.aws:ro
+      - ~/.aws:/root/.aws
       - ../crawler/redfin_spider/property_url_discovery_spider_logs:/houseTracker/python/crawler/redfin_spider/property_url_discovery_spider_logs
 
   property-crawler-spider:
@@ -31,7 +31,7 @@ services:
       restart_policy:
         condition: on-failure
     volumes:
-      - ~/.aws:/root/.aws:ro
+      - ~/.aws:/root/.aws
       - ../crawler/redfin_spider/property_crawler_spider_logs:/houseTracker/python/crawler/redfin_spider/property_crawler_spider_logs
       - ../crawler/redfin_spider/property_crawler_spider_output:/houseTracker/python/crawler/redfin_spider/property_crawler_spider_output
 
@@ -40,5 +40,13 @@ services:
       - SERVICE_ENV=local
       - AWS_PROFILE=${AWS_PROFILE}
     volumes:
-      - ~/.aws:/root/.aws:ro
+      - ~/.aws:/root/.aws
       - ../data_service/property_data_ingestion_logs:/houseTracker/python/data_service/property_data_ingestion_logs
+
+  property-scan-service:
+    environment:
+      - SERVICE_ENV=local
+      - AWS_PROFILE=${AWS_PROFILE}
+    volumes:
+      - ~/.aws:/root/.aws
+      - ../data_service/property_scan_logs:/houseTracker/python/data_service/property_scan_logs

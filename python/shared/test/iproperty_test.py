@@ -353,6 +353,145 @@ class Test_IPropertyMetadata(unittest.TestCase):
         # Should not be equal even when excluding last_updated due to different price
         self.assertFalse(self.base_metadata.is_equal(metadata2, exclude_last_updated=True))
 
+class Test_IPropertyMetadata_Merge(unittest.TestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        configure_logger(log_level=logging.DEBUG)
+
+        self.existing = IPropertyMetadata(
+            address=IPropertyAddress("1838 Market St,Kirkland, WA 98033"),
+            area=PropertyArea(Decimal("2000"), AreaUnit.SquareFeet),
+            property_type=PropertyType.SingleFamily,
+            lot_area=PropertyArea(Decimal("0.25"), AreaUnit.Acres),
+            number_of_bedrooms=Decimal("3"),
+            number_of_bathrooms=Decimal("2.5"),
+            year_built=2010,
+            status=PropertyStatus.Active,
+            price=Decimal("750000"),
+            last_updated=datetime(2024, 1, 15, tzinfo=timezone.utc),
+            data_sources=[IPropertyDataSource("redfin_123", "https://redfin.com/old", "Redfin")],
+        )
+
+    def _make_new(self, **overrides) -> IPropertyMetadata:  # type: ignore[no-untyped-def]
+        defaults = dict(
+            address=IPropertyAddress("999 New St,Seattle, WA 98101"),
+            area=PropertyArea(Decimal("2500"), AreaUnit.SquareFeet),
+            property_type=PropertyType.Condo,
+            lot_area=PropertyArea(Decimal("0.10"), AreaUnit.Acres),
+            number_of_bedrooms=Decimal("4"),
+            number_of_bathrooms=Decimal("3"),
+            year_built=2020,
+            status=PropertyStatus.Pending,
+            price=Decimal("900000"),
+            last_updated=datetime(2025, 1, 15, tzinfo=timezone.utc),
+            data_sources=[IPropertyDataSource("redfin_123", "https://redfin.com/new", "Redfin")],
+        )
+        defaults.update(overrides)
+        return IPropertyMetadata(**defaults)  # type: ignore[arg-type]
+
+    # --- Non-null overwrite cases ---
+
+    def test_merge_all_fields_non_null_takes_new(self) -> None:
+        new = self._make_new()
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.address, new.address)
+        self.assertEqual(result.area, new.area)
+        self.assertEqual(result.property_type, new.property_type)
+        self.assertEqual(result.lot_area, new.lot_area)
+        self.assertEqual(result.number_of_bedrooms, new.number_of_bedrooms)
+        self.assertEqual(result.number_of_bathrooms, new.number_of_bathrooms)
+        self.assertEqual(result.year_built, new.year_built)
+
+    def test_merge_null_area_keeps_existing(self) -> None:
+        new = self._make_new(area=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.area, self.existing.area)
+
+    def test_merge_null_bedrooms_keeps_existing(self) -> None:
+        new = self._make_new(number_of_bedrooms=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.number_of_bedrooms, self.existing.number_of_bedrooms)
+
+    def test_merge_null_bathrooms_keeps_existing(self) -> None:
+        new = self._make_new(number_of_bathrooms=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.number_of_bathrooms, self.existing.number_of_bathrooms)
+
+    def test_merge_null_year_built_keeps_existing(self) -> None:
+        new = self._make_new(year_built=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.year_built, self.existing.year_built)
+
+    def test_merge_null_lot_area_keeps_existing(self) -> None:
+        new = self._make_new(lot_area=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.lot_area, self.existing.lot_area)
+
+    def test_merge_null_address_keeps_existing(self) -> None:
+        new = self._make_new(address=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.address, self.existing.address)
+
+    def test_merge_null_property_type_keeps_existing(self) -> None:
+        new = self._make_new(property_type=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.property_type, self.existing.property_type)
+
+    # --- Always overwrite cases ---
+
+    def test_merge_status_always_taken_from_new(self) -> None:
+        new = self._make_new(status=PropertyStatus.Sold)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.status, PropertyStatus.Sold)
+
+    def test_merge_price_always_taken_from_new_including_none(self) -> None:
+        new = self._make_new(price=None)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertIsNone(result.price)
+
+    def test_merge_last_updated_always_taken_from_new(self) -> None:
+        new_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        new = self._make_new(last_updated=new_time)
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(result.last_updated, new_time)
+
+    # --- Data sources merge cases ---
+
+    def test_merge_data_sources_same_id_same_url_no_change(self) -> None:
+        new = self._make_new(data_sources=[IPropertyDataSource("redfin_123", "https://redfin.com/old", "Redfin")])
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(len(result.data_sources), 1)
+        self.assertEqual(result.data_sources[0].source_url, "https://redfin.com/old")
+
+    def test_merge_data_sources_same_id_different_url_updates_url(self) -> None:
+        new = self._make_new(data_sources=[IPropertyDataSource("redfin_123", "https://redfin.com/updated", "Redfin")])
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(len(result.data_sources), 1)
+        self.assertEqual(result.data_sources[0].source_url, "https://redfin.com/updated")
+
+    def test_merge_data_sources_different_id_appends(self) -> None:
+        new = self._make_new(data_sources=[IPropertyDataSource("zillow_456", "https://zillow.com/456", "Zillow")])
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(len(result.data_sources), 2)
+        source_ids = [s.source_id for s in result.data_sources]
+        self.assertIn("redfin_123", source_ids)
+        self.assertIn("zillow_456", source_ids)
+
+    def test_merge_data_sources_empty_new_keeps_existing(self) -> None:
+        new = self._make_new(data_sources=[])
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(len(result.data_sources), 1)
+        self.assertEqual(result.data_sources[0].source_id, "redfin_123")
+
+    def test_merge_data_sources_empty_existing_takes_new(self) -> None:
+        self.existing._data_sources = []
+        new = self._make_new(data_sources=[IPropertyDataSource("zillow_456", "https://zillow.com/456", "Zillow")])
+        result = IPropertyMetadata.merge(self.existing, new)
+        self.assertEqual(len(result.data_sources), 1)
+        self.assertEqual(result.data_sources[0].source_id, "zillow_456")
+
+
 class Test_IPropertyHistoryEvent(unittest.TestCase):
 
     def setUp(self) -> None:

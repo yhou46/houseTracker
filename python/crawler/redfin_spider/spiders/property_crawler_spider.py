@@ -271,6 +271,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
                 property_url = message_data.property_url
                 from_page_url = message_data.from_page_url
                 scraped_at_utc = message_data.scraped_at_utc
+                property_id = message_data.property_id
 
                 if not property_url:
                     self.logger.warning(f"Received message without property_url: {message_data}")
@@ -286,6 +287,7 @@ class PropertyCrawlerSpider(scrapy.Spider):
                     meta={
                         "from_page_url": from_page_url,
                         "scraped_at_utc": scraped_at_utc,
+                        "property_id": property_id,
                     }
                 )
 
@@ -386,11 +388,11 @@ class PropertyCrawlerSpider(scrapy.Spider):
                 item['zipCode'] = 'unknown'
                 self.logger.warning(f"No zip code found for property: {item.get('address', 'Unknown address')}")
 
+            # 4. Pass through property_id from scan flow (None for new discovery)
+            item['propertyId'] = response.meta.get('property_id')
+
             # Log the extracted data
-            self.logger.info(f"Extracted property: {item.get('address', 'Unknown address')}")
-            self.logger.info(f"  - Redfin ID: {item.get('redfinId')}")
-            self.logger.info(f"  - Area: {item.get('area')} sq ft")
-            self.logger.info(f"  - Zip Code: {item.get('zipCode')}")
+            self.logger.info(f"Extracted property: {item.get('address', 'Unknown address')}, Redfin ID: {item.get('redfinId')}, Zip Code: {item.get('zipCode')}, Property ID if any: {item.get('propertyId')}")
 
             self.properties_crawled += 1
 

@@ -329,7 +329,10 @@ class IPropertyMetadata(IPropertyBasic):
         super().__init__(address, area, property_type, lot_area, number_of_bedrooms, number_of_bathrooms, year_built)
         self._status = status
         self._price = price
+
+        # Last time a property is scanned(data can be changed or not changed)
         self._last_updated = last_updated
+
         self._data_sources = data_sources
 
     @property
@@ -355,6 +358,10 @@ class IPropertyMetadata(IPropertyBasic):
 
     def update_price(self, price: Decimal | None) -> None:
         self._price = price
+        self._last_updated = datetime.now(timezone.utc)
+
+    def update_last_updated_time(self, last_updated: datetime) -> None:
+        self._last_updated = last_updated
 
     def is_equal(
         self,
@@ -379,6 +386,46 @@ class IPropertyMetadata(IPropertyBasic):
         return (
             super().__str__() +
             f",\nstatus: {self._status.value},\nprice: {self._price if self._price is not None else 'N/A'},\ndataSource:\n{",\n".join(str(source)for source in self._data_sources)},\nlastUpdated: {self.last_updated.isoformat()}"
+        )
+
+    @staticmethod
+    def merge(existing: "IPropertyMetadata", new: "IPropertyMetadata") -> "IPropertyMetadata":
+        """
+        Return new metadata with non-null fields from new applied over existing.
+        status, price, and last_updated are always taken from new.
+        """
+        new_address = new.address if new.address is not None else existing.address
+        new_area = new.area if new.area is not None else existing.area
+        new_property_type = new.property_type if new.property_type is not None else existing.property_type
+        new_lot_area = new.lot_area if new.lot_area is not None else existing.lot_area
+        new_number_of_bedrooms = new.number_of_bedrooms if new.number_of_bedrooms is not None else existing.number_of_bedrooms
+        new_number_of_bathrooms = new.number_of_bathrooms if new.number_of_bathrooms is not None else existing.number_of_bathrooms
+        new_year_built = new.year_built if new.year_built is not None else existing.year_built
+        merged_sources = list(existing.data_sources)
+        for new_source in new.data_sources:
+            match = next((s for s in merged_sources if s.source_id == new_source.source_id), None)
+            if match is None:
+                merged_sources.append(new_source)
+            elif match.source_url != new_source.source_url:
+                merged_sources[merged_sources.index(match)] = IPropertyDataSource(
+                    source_id=match.source_id,
+                    source_url=new_source.source_url,
+                    source_name=match.source_name,
+                )
+        new_data_sources = merged_sources if merged_sources else existing.data_sources
+
+        return IPropertyMetadata(
+            address=new_address,
+            area=new_area,
+            property_type=new_property_type,
+            lot_area=new_lot_area,
+            number_of_bedrooms=new_number_of_bedrooms,
+            number_of_bathrooms=new_number_of_bathrooms,
+            year_built=new_year_built,
+            status=new.status,
+            price=new.price,
+            last_updated=new.last_updated,
+            data_sources=new_data_sources,
         )
 
     def __eq__(self, other: object) -> bool:

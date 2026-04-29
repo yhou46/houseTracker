@@ -51,6 +51,22 @@ services:
     # profiles:
     #   - data_ingestion
 
+  # Property Scan Service
+  property-scan-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: property-scan-service
+    environment:
+      - SERVICE_ENV=local
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - housetracker-network
+    # profiles:
+    #   - scan
+
 networks:
   housetracker-network:
     driver: bridge

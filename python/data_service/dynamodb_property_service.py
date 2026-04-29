@@ -803,32 +803,43 @@ class DynamoDBPropertyService(IPropertyStorageService):
             property_id: str,
             ) -> None:
         """
-        Update property metadata
+        Update property metadata using field-level merge: non-null fields from new_metadata
+        overwrite existing, null fields fall back to existing values.
+        status, price, and last_updated are always taken from new_metadata.
+        Skips write if merged result is identical to existing or if existing is newer.
         """
-        if (existing_metadata == new_metadata):
-            self.logger.info("metadata is exactly the same, skip the update")
+        merged_metadata = IPropertyMetadata.merge(existing_metadata, new_metadata)
+
+        if (
+            existing_metadata.last_updated >= merged_metadata.last_updated and existing_metadata.is_equal(
+                merged_metadata, exclude_last_updated=True)):
+            self.logger.info(f"Existing metadata last updated {existing_metadata.last_updated} is newer than or same as merged metadata last updated {merged_metadata.last_updated} and metadata entries are exactly the same, skip the update")
             return
 
-        if (existing_metadata.last_updated >= new_metadata.last_updated):
-            self.logger.info(f"existing metadata last updated {existing_metadata.last_updated} is newer than or same as new metadata last updated {new_metadata.last_updated}, skip the update")
-            return
+        if merged_metadata.last_updated < existing_metadata.last_updated:
+            self.logger.warning(f"Merged metadata's last updated time: {merged_metadata.last_updated} is older than existing metadata's last updated time: {existing_metadata.last_updated}")
 
-        items_to_be_updated = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
+        if merged_metadata.is_equal(
+            existing_metadata,
+            exclude_last_updated=True,
+        ):
+            self.logger.info(f"Merged metadata is same as existing metadata, propertyAddress={merged_metadata.address}")
 
-        # TODO: use the _write_items function?
-        try:
-            with self.table.batch_writer() as writer:
-                # Overwrite with new metadata
-                writer.put_item(items_to_be_updated)
+        self._write_items([convert_property_metadata_to_dynamodb_items(merged_metadata, property_id)])
 
-        except ClientError as err:
-            self.logger.error(
-                "Couldn't load data into table %s. Here's why: %s: %s",
-                self.table.name,
-                err.response["Error"]["Code"],
-                err.response["Error"]["Message"],
-            )
-            raise err
+    def overwrite_property_metadata(
+            self,
+            new_metadata: IPropertyMetadata,
+            property_id: str,
+            ) -> None:
+        """
+        Unconditionally overwrite all property metadata fields in DynamoDB.
+        Use this for manual corrections where you explicitly want to replace everything.
+        Unlike _update_property_metadata, skips timestamp and equality checks.
+        """
+        self.logger.info(f"Overwriting metadata for property {property_id}")
+        item = convert_property_metadata_to_dynamodb_items(new_metadata, property_id)
+        self._write_items([item])
 
     def _update_property_history(
             self,

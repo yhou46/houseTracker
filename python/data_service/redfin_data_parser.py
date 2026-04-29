@@ -489,7 +489,6 @@ def correct_property_history(
             logger.info(f"Correcting property history by adding event: {list_removed_event}, address: {history.address}")
             history.addEvent(list_removed_event)
 
-# TODO: handle metadata change? Like address or property type change.
 def update_property_from_raw_data(
         raw_data: RawPropertyData,
         existing_property: IProperty,
@@ -513,8 +512,6 @@ def update_property_from_raw_data(
     if not isinstance(status_raw_str, str):
         raise ValueError(f"Status: {status_raw_str} is not str")
 
-    print(existing_property.history)
-
     new_status = parse_property_status(status_raw_str, existing_property.history)
     if new_status != existing_property.status:
         logger.info(f"Property status changed from {existing_property.status} to {new_status} for address: {existing_property.address}, id: {existing_property.id}")
@@ -531,6 +528,8 @@ def update_property_from_raw_data(
             last_updated,
         )
         logger.info(f"Updated property after correction: {existing_property.metadata}, history: {existing_property.history}")
+    else:
+        existing_property.metadata.update_last_updated_time(last_updated)
 
     return existing_property.metadata, existing_property.history
 

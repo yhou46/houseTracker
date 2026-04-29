@@ -8,6 +8,7 @@ REPOSITORY_PREFIX="housetracker"
 # Repository names
 REDFIN_SPIDER_REPO="${REPOSITORY_PREFIX}/redfin-spider"
 DATA_INGESTION_REPO="${REPOSITORY_PREFIX}/data-ingestion-service"
+PROPERTY_SCAN_REPO="${REPOSITORY_PREFIX}/property-scan-service"
 
 # Get AWS account ID
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -85,6 +86,15 @@ docker build \
     "${DOCKERFILE_DIR}"
 
 echo ""
+echo "Building property-scan-service image..."
+docker build \
+    --platform linux/arm64 \
+    --target property-scan-service \
+    --tag "${PROPERTY_SCAN_REPO}:${IMAGE_TAG}" \
+    --file "${DOCKERFILE_DIR}/Dockerfile" \
+    "${DOCKERFILE_DIR}"
+
+echo ""
 echo "=========================================="
 echo "Step 3: Tag images for ECR"
 echo "=========================================="
@@ -95,6 +105,10 @@ docker tag "${REDFIN_SPIDER_REPO}:${IMAGE_TAG}" \
 echo "Tagging data-ingestion-service..."
 docker tag "${DATA_INGESTION_REPO}:${IMAGE_TAG}" \
     "${ECR_REGISTRY}/${DATA_INGESTION_REPO}:${IMAGE_TAG}"
+
+echo "Tagging property-scan-service..."
+docker tag "${PROPERTY_SCAN_REPO}:${IMAGE_TAG}" \
+    "${ECR_REGISTRY}/${PROPERTY_SCAN_REPO}:${IMAGE_TAG}"
 
 echo ""
 echo "=========================================="
@@ -108,6 +122,10 @@ echo "Pushing data-ingestion-service..."
 docker push "${ECR_REGISTRY}/${DATA_INGESTION_REPO}:${IMAGE_TAG}"
 
 echo ""
+echo "Pushing property-scan-service..."
+docker push "${ECR_REGISTRY}/${PROPERTY_SCAN_REPO}:${IMAGE_TAG}"
+
+echo ""
 echo "=========================================="
 echo "Done!"
 echo "=========================================="
@@ -115,3 +133,4 @@ echo ""
 echo "Pushed images:"
 echo "  ${ECR_REGISTRY}/${REDFIN_SPIDER_REPO}:${IMAGE_TAG}"
 echo "  ${ECR_REGISTRY}/${DATA_INGESTION_REPO}:${IMAGE_TAG}"
+echo "  ${ECR_REGISTRY}/${PROPERTY_SCAN_REPO}:${IMAGE_TAG}"

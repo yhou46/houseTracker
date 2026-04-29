@@ -23,6 +23,7 @@ export TASK_EXECUTION_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/housetracker
 export TASK_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/housetracker-ecs-task-role"
 export REDFIN_SPIDER_IMAGE="${ECR_REGISTRY}/housetracker/redfin-spider:${IMAGE_TAG}"
 export DATA_INGESTION_IMAGE="${ECR_REGISTRY}/housetracker/data-ingestion-service:${IMAGE_TAG}"
+export PROPERTY_SCAN_IMAGE="${ECR_REGISTRY}/housetracker/property-scan-service:${IMAGE_TAG}"
 
 echo "=========================================="
 echo "Registering ECS Task Definition"
@@ -33,6 +34,7 @@ echo "Template:    ${TASK_DEFINITION_FILE}"
 echo "Images:"
 echo "  redfin-spider:          ${REDFIN_SPIDER_IMAGE}"
 echo "  data-ingestion-service: ${DATA_INGESTION_IMAGE}"
+echo "  property-scan-service:  ${PROPERTY_SCAN_IMAGE}"
 echo ""
 
 # Substitute environment variables into the JSON template
