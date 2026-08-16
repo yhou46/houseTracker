@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple, Any, cast
 from scrapy.http import Response
-import logging
 
 from ..redfin_parser import parse_property_sublinks
 from shared.logger_factory import LoggerLike
@@ -47,7 +46,6 @@ def setup_spider_logging(
 
     return log_file_path
 
-# TODO: removed it? since it is no used
 def create_debug_directory(base_directory: str) -> str:
     """
     Create and return debug directory path.
@@ -310,12 +308,11 @@ def find_next_pagination_link(
 # Debugging
 # =====================================
 
-# TODO: remove later? Not used
 def save_html_response_debug(
     response: Response,
     page_type: str,
     debug_dir: str,
-    logger: logging.Logger
+    logger: LoggerLike
 ) -> None:
     """
     Save HTML response to file for debugging purposes.
@@ -336,8 +333,9 @@ def save_html_response_debug(
         # Creates file: /app/debug/search_results_20260107_123456.html
     """
     try:
-        # Create filename with timestamp and page type
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        # Create filename with timestamp and page type. Microseconds avoid collisions
+        # when multiple concurrent requests trigger a save within the same second.
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         filename = f"{page_type}_{timestamp}.html"
         filepath = os.path.join(debug_dir, filename)
 

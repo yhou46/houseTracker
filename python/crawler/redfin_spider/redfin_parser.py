@@ -9,6 +9,7 @@ import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Any, Optional, List, Set
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 import json
 
@@ -97,6 +98,39 @@ def parse_property_sublinks(html_content: str) -> List[str]:
             raise ValueError(f"Unexpected href type: {type(href)}")
 
     return list(property_urls)
+
+def extract_property_urls(html_content: str, base_url: str) -> List[str]:
+    """
+    Extract and validate property URLs from a search results page.
+
+    Uses parse_property_sublinks() to extract links, then:
+    - Filters for valid property URLs (must contain '/home/')
+    - Converts relative URLs to absolute URLs using base_url
+    - Returns list of validated absolute URLs
+
+    Args:
+        html_content: HTML content of the search results page
+        base_url: URL of the search results page, used to resolve relative links
+
+    Returns:
+        List of absolute property URLs
+    """
+    property_links = parse_property_sublinks(html_content)
+
+    logger.info(f"Found {len(property_links)} property links in raw HTML")
+
+    valid_urls = []
+    for i, link in enumerate(property_links, 1):
+        if link and '/home/' in link:
+            full_url = urljoin(base_url, link)
+            valid_urls.append(full_url)
+            logger.debug(f"Property link {i}: {full_url}")
+        else:
+            logger.warning(f"Skipping invalid link {i}: {link}")
+
+    logger.info(f"Extracted {len(valid_urls)} valid property URLs")
+
+    return valid_urls
 
 def parse_property_details(html_content: str) -> Dict[str, Any]:
     """
