@@ -15,15 +15,16 @@ services:
 
   property-url-discovery-spider:
     environment:
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
       - AWS_PROFILE=${AWS_PROFILE}
     volumes:
       - ~/.aws:/root/.aws
       - ../crawler/redfin_spider/property_url_discovery_spider_logs:/houseTracker/python/crawler/redfin_spider/property_url_discovery_spider_logs
+      - ../crawler/redfin_spider/debug:/houseTracker/python/crawler/redfin_spider/debug
 
   property-crawler-spider:
     environment:
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
       - AWS_PROFILE=${AWS_PROFILE}
     deploy:
       mode: replicated-job
@@ -37,7 +38,7 @@ services:
 
   property-data-ingestion-service:
     environment:
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
       - AWS_PROFILE=${AWS_PROFILE}
     volumes:
       - ~/.aws:/root/.aws
@@ -45,7 +46,7 @@ services:
 
   property-scan-service:
     environment:
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
       - AWS_PROFILE=${AWS_PROFILE}
     volumes:
       - ~/.aws:/root/.aws

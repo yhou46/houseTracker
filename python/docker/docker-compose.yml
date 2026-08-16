@@ -9,7 +9,7 @@ services:
       target: redfin-spider
     environment:
       - SPIDER_NAME=property_url_discovery_spider
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
     depends_on:
       redis:
         condition: service_healthy
@@ -26,7 +26,7 @@ services:
       target: redfin-spider
     environment:
       - SPIDER_NAME=property_crawler_spider
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
     depends_on:
       redis:
         condition: service_healthy
@@ -42,7 +42,7 @@ services:
       dockerfile: Dockerfile
       target: data-ingestion-service
     environment:
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
     depends_on:
       redis:
         condition: service_healthy
@@ -58,7 +58,7 @@ services:
       dockerfile: Dockerfile
       target: property-scan-service
     environment:
-      - SERVICE_ENV=local
+      - SERVICE_ENV=docker
     depends_on:
       redis:
         condition: service_healthy

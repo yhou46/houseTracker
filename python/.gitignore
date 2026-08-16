@@ -2,3 +2,6 @@ temp/**
 
 # Docker environment files (contain secrets)
 docker/.env
+
+# Spider debug HTML dumps
+crawler/redfin_spider/debug/
