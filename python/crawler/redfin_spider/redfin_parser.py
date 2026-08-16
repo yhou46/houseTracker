@@ -132,6 +132,26 @@ def extract_property_urls(html_content: str, base_url: str) -> List[str]:
 
     return valid_urls
 
+def is_anti_bot_challenge_page(html_content: str) -> bool:
+    """
+    Detect whether HTML content is an anti-bot/WAF challenge page rather than
+    real content, e.g. when a search results page yields zero property links
+    because Redfin served an interstitial challenge instead of the actual page
+    (observed in practice as an AWS WAF JS challenge page).
+    """
+    # Note: "awswaf.com" alone is not a reliable marker - Redfin loads an AWS WAF
+    # fingerprinting SDK (e.g. edge.sdk.awswaf.com) on normal pages too. Same risk
+    # applies to "AwsWafIntegration" (its JS class name), since that SDK could be
+    # embedded site-wide for background scoring, not just on the challenge page.
+    # These markers stick to the interstitial challenge page's user-facing content.
+    lower_content = html_content.lower()
+    anti_bot_markers = [
+        "javascript is disabled",
+        "challenge-container",
+        "gokuprops",
+    ]
+    return any(marker in lower_content for marker in anti_bot_markers)
+
 def parse_property_details(html_content: str) -> Dict[str, Any]:
     """
     Parse property details from HTML content using Beautiful Soup.
