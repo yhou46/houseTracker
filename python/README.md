@@ -74,10 +74,10 @@ pipenv run python ./shared/test/iproperty.test.py
 mypy ./
 ```
 
-# Run in docker mode
+# Run in local docker mode
 ```shell
 # Start redis
-docker compose -f docker-compose.dev.yml up
+docker compose -f docker/docker-compose.dev.yml up
 ```
 
 ```shell

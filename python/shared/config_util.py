@@ -6,7 +6,7 @@ import json
 from shared.logger_factory import get_logger
 
 class ServiceEnvironment(Enum):
-    Local = "local"
+    Docker = "docker"
     AWS = "aws"
 
 def load_json_config(config_path: str) -> Dict[str, Any]:
@@ -43,7 +43,12 @@ def get_config_from_file(
 )-> Dict[str, Any]:
 
     """
-    Get config from config file based on environment variables
+    Get config from config file based on environment variables.
+
+    SERVICE_ENV selects the config file suffix:
+    - unset/empty: running directly on a host machine (no suffix, e.g. redis at "localhost")
+    - "docker": running inside local docker-compose (".docker.json", e.g. redis at "redis")
+    - "aws": running as an AWS deployment (".aws.json")
     """
 
     environment_var_name = "SERVICE_ENV"

@@ -17,12 +17,14 @@ import scrapy
 from scrapy.http import Response
 
 from ..items import PropertyUrlItem
+from ..redfin_parser import extract_property_urls, is_anti_bot_challenge_page
 from .utils import (
     setup_spider_logging,
     generate_start_urls_from_config,
-    extract_property_urls_from_response,
     extract_current_page_number,
     find_next_pagination_link,
+    create_debug_directory,
+    save_html_response_debug,
 )
 from shared.logger_factory import configure_logger
 from shared.config_util import get_config_from_file
@@ -117,6 +119,13 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
             # Store config for spider instance
             spider.config = config
 
+            # Debug settings
+            debug_config = config.get("debug", {})
+            spider.debug_enabled = bool(debug_config.get("enable_debug", False))
+            spider.logger.info(f"Debug HTML capture enabled: {spider.debug_enabled}")
+            if spider.debug_enabled:
+                spider.debug_dir = create_debug_directory(base_directory=os.path.dirname(__file__))
+
             # Apply spider_settings from config (override defaults)
             spider_settings = config.get("spider_settings", {})
             for key, value in spider_settings.items():
@@ -157,6 +166,12 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
 
         # Start URLs will be set in start_requests()
         self.start_urls: list[str] = []
+
+        # Debug directory for saving HTML on parsing failures (set by from_crawler)
+        self.debug_dir: str = ""
+
+        # Whether to save HTML captures for zero-link pages (set by from_crawler from config)
+        self.debug_enabled: bool = False
 
         # Configure logger for other functions
         configure_logger(logger_override=self.logger)
@@ -208,7 +223,28 @@ class PropertyUrlDiscoverySpider(scrapy.Spider):
         self.logger.info(f"Parsing search results from: {response.url}")
 
         # Extract property URLs from this page
-        property_urls = extract_property_urls_from_response(response, self.logger)
+        property_urls = extract_property_urls(response.text, response.url)
+
+        if not property_urls:
+            if is_anti_bot_challenge_page(response.text):
+                self.logger.error(
+                    f"Anti-bot challenge page detected instead of real search results for: {response.url}. "
+                    f"This is not a parsing bug - Redfin is blocking/throttling this request."
+                )
+            else:
+                self.logger.warning(
+                    f"No property URLs found for: {response.url}, and the page does not look like an "
+                    f"anti-bot challenge - the CSS selector in parse_property_sublinks may be stale."
+                )
+
+            if self.debug_enabled:
+                url_slug = response.url.replace("https://", "").replace("http://", "").replace("/", "_")[:100]
+                save_html_response_debug(
+                    response=response,
+                    page_type=f"zero_links_{url_slug}",
+                    debug_dir=self.debug_dir,
+                    logger=self.logger,
+                )
 
         # Create timestamp for all URLs discovered from this page
         scraped_at_utc = datetime.now(timezone.utc).isoformat()

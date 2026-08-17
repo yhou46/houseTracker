@@ -25,3 +25,8 @@ def get_html_content_from_url(url: str, save_to_filepath: str | None = None) -> 
             raise Exception(f"Failed to fetch page url: {url}, error code: {response.status_code}")
     except Exception as error:
         raise Exception(f"Error fetching URL {url}: {error}")
+
+if __name__ == "__main__":
+    # Test with live URL (uncomment to test)
+    url = "https://www.redfin.com/city/9148/WA/Kirkland"
+    html_content = get_html_content_from_url(url, save_to_filepath="/Users/yunpenghou-macbookpro2023/workspace/houseTracker/python/crawler/redfin_spider/test/test_samples/redfin_page_city_20260816_1021.html")

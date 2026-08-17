@@ -51,5 +51,8 @@
     },
     "spider_settings": {
 
+    },
+    "debug": {
+        "enable_debug": false
     }
 }
