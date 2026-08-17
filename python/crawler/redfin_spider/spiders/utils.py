@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import Optional, List, Dict, Tuple, Any, cast
 from scrapy.http import Response
 
-from ..redfin_parser import parse_property_sublinks
 from shared.logger_factory import LoggerLike
 from shared.utils import generate_unique_time_based_str
 
@@ -107,51 +106,6 @@ def extract_zip_code_from_url(url: str, meta: Optional[Dict[str, Any]] = None) -
         zip_code = meta.get('zip_code')
 
     return zip_code
-
-
-def extract_property_urls_from_response(
-    response: Response,
-    logger: LoggerLike,
-) -> List[str]:
-    """
-    Extract and validate property URLs from search results.
-
-    Uses parse_property_sublinks() to extract links, then:
-    - Filters for valid property URLs (must contain '/home/')
-    - Converts relative URLs to absolute URLs
-    - Returns list of validated absolute URLs
-
-    Args:
-        response: Scrapy Response object from search results page
-        logger: Logger instance for logging warnings
-
-    Returns:
-        List of absolute property URLs
-
-    Example:
-        >>> urls = extract_property_urls_from_response(response, logger)
-        >>> urls
-        ['https://www.redfin.com/WA/Seattle/.../home/123', ...]
-    """
-    # Extract property links from HTML
-    property_links = parse_property_sublinks(response.text)
-
-    logger.info(f"Found {len(property_links)} property links in raw HTML")
-
-    # Filter and convert to absolute URLs
-    valid_urls = []
-    for i, link in enumerate(property_links, 1):
-        if link and '/home/' in link:
-            # Convert relative URL to absolute URL
-            full_url = response.urljoin(link)
-            valid_urls.append(full_url)
-            logger.debug(f"Property link {i}: {full_url}")
-        else:
-            logger.warning(f"Skipping invalid link {i}: {link}")
-
-    logger.info(f"Extracted {len(valid_urls)} valid property URLs")
-
-    return valid_urls
 
 
 def generate_start_urls_from_config(config: Dict[str, Any]) -> List[str]:
