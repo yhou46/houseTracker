@@ -1,8 +1,16 @@
 {
-    "mypy-type-checker.reportingScope": "workspace",
+    "python-envs.defaultEnvManager": "ms-python.python:pipenv",
+    "mypy-type-checker.importStrategy": "fromEnvironment",
+    "mypy-type-checker.cwd": "${workspaceFolder}/python",
     "mypy-type-checker.args": [
         "--config-file=${workspaceFolder}/python/mypy.ini"
     ],
-    "mypy-type-checker.cwd": "${workspaceFolder}/python",
-    "python-envs.defaultEnvManager": "ms-python.python:pipenv"
+    "mypy-type-checker.reportingScope": "workspace",
+    "python-envs.pythonProjects": [
+        {
+            "path": "python",
+            "envManager": "ms-python.python:pipenv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ]
 }
